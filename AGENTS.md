@@ -274,6 +274,95 @@ unless explicitly required by an external API.
 
 ---
 
+# Result Types
+
+Functions should return successful results only.
+
+Failures should be communicated by throwing exceptions.
+
+Do not return success/error discriminated unions or objects such as:
+
+```ts
+Promise<
+    | { success: true; ... }
+    | { success: false; error: ... }
+>
+```
+
+Instead:
+
+- Return the successful result type.
+- Throw exceptions for failures.
+
+Example:
+
+```ts
+Promise<CreateOrganizationResult>
+```
+
+The only exception is when interacting with third-party libraries or APIs that already define their own success/error response contract (for example, Supabase client methods).
+
+---
+
+# Type Naming Conventions
+
+## Repository Types
+
+```
+Entity
+InsertEntity
+UpdateEntity
+```
+
+Example:
+
+```ts
+User
+InsertUser
+UpdateUser
+```
+
+---
+
+## Input Types
+
+Public functions should expose named input types.
+
+Convention:
+
+```
+<Operation>Input
+```
+
+Examples:
+
+```ts
+CreateOrganizationInput
+CreateOrganizationAdminInput
+```
+
+Avoid anonymous object types in public APIs.
+
+---
+
+## Result Types
+
+Public functions should expose named result types where appropriate.
+
+Convention:
+
+```
+<Operation>Result
+```
+
+Example:
+
+```ts
+BootstrapOrganizationResult
+```
+
+---
+
 # Documentation
 
 Comments and JSDoc should describe **what** the code does, not **how** it does it.

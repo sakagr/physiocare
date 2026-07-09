@@ -73,6 +73,7 @@ Repository naming convention:
 - delete...
 - list...
 - exists...
+- count...
 
 Examples:
 
@@ -87,15 +88,14 @@ deleteInvoice()
 
 ## Services
 
-Services implement business workflows.
+Services implement business capabilities. Complex business workflows are coordinated by dedicated orchestration services.
 
 Services may:
 
 - Coordinate repositories.
-- Call authentication services.
-- Call external services.
+- Call other services.
+- Call external systems through dedicated service abstractions.
 - Implement business rules.
-- Send invitations.
 - Perform orchestration.
 
 Service naming convention:
@@ -144,37 +144,23 @@ Supabase Auth is treated as an external authentication provider.
 
 It is not treated as another database table.
 
+The Auth Service is the abstraction over Supabase Auth. It owns all authentication identity operations (including invitations, as they belong to the authentication subsystem rather than the business domain).
+
 Authentication-related operations belong in:
 
 ```
 src/server/services/auth.service.ts
 ```
 
-Examples:
+The Auth Service is the only layer that should interact directly with Supabase Auth, including:
 
-```ts
-createAuthUser()
-deleteAuthUser()
-```
-
----
-
-# Invitations
-
-Invitation functionality belongs in:
-
-```
-src/server/services/invitation.service.ts
-```
-
-Examples:
-
-```ts
-inviteUser()
-resendInvitation()
-```
-
-Invitation services must not know application-specific roles.
+- inviteUser()
+- resendInvitation()
+- deleteUser()
+- disableUser()
+- enableUser()
+- updateUser()
+- resetPassword()
 
 ---
 
@@ -511,31 +497,79 @@ src/server/services/auth.service.ts
 
 ---
 
-## Organization Onboarding
+## Organization Bootstrap
 
 Organizations are created only by `SUPER_ADMIN`.
 
 There is no public organization signup.
 
-The onboarding workflow is:
+The bootstrapping workflow is:
 
 ```
-SUPER_ADMIN
+Validate Input
     ↓
-Create Auth User
+Check Organization Name Uniqueness
     ↓
-Create Organization
+Check Administrator Email Uniqueness
+    ↓
+Invite User (Creates Supabase Auth User)
+    ↓
+Create Organization (status = draft)
     ↓
 Create Application User
     ↓
-Send Invitation
+Update Organization.created_by
     ↓
-User Sets Password
+Activate Organization (status = active)
+    ↓
+Return Result
 ```
 
-Temporary passwords are not used.
+- The authentication provider is responsible for creating the authentication identity during the invitation process.
+- The application does not create Auth users separately before inviting them.
+- The Auth User ID returned by the invitation process is used when creating the application user.
+- Organizations are initially created with `status = draft`.
+- Organizations become `active` only after bootstrapping completes successfully.
+
+Temporary passwords are never used.
 
 Users create their own passwords through the invitation flow.
+
+---
+
+## Organization Lifecycle
+
+Organization lifecycle is independent from subscription lifecycle.
+
+`status` represents the operational state of an organization.
+
+Possible states:
+
+- draft
+  - Organization has been created but bootstrapping is not complete.
+
+- active
+  - Organization is fully operational.
+
+- suspended
+  - Organization has been temporarily disabled.
+
+- archived
+  - Organization has been retired and retained only for historical purposes.
+
+---
+
+## Subscription Principles
+
+Organization onboarding and subscription management are separate business workflows.
+
+The following rules apply:
+
+- `subscription_plan_id` is nullable.
+- New organizations are created without a subscription plan.
+- `subscription_status` defaults to `inactive`.
+- Trial or paid subscriptions begin only when explicitly activated by the business workflow.
+- Organization onboarding must not contain subscription or billing logic.
 
 ---
 
@@ -570,3 +604,124 @@ Do not introduce abstraction for hypothetical future requirements.
 Model the business domain as it exists today.
 
 Refactor only when business requirements change.
+
+---
+
+# Supabase Query Conventions
+
+Repository methods should use the following conventions:
+
+## Lookup Methods
+
+Use:
+
+```ts
+.maybeSingle()
+```
+
+for methods beginning with:
+
+- find...
+- get...
+
+These methods should return:
+
+- Entity
+- null
+
+when no matching row exists.
+
+---
+
+## Insert / Update / Delete Methods
+
+Use:
+
+```ts
+.single()
+```
+
+These methods are expected to affect exactly one row and should return that row.
+
+---
+
+## List Methods
+
+Return arrays.
+
+Do not use:
+
+```ts
+.single()
+```
+
+or
+
+```ts
+.maybeSingle()
+```
+
+---
+
+## Error Handling
+
+If Supabase returns an unexpected database error:
+
+```ts
+if (error) {
+    throw error;
+}
+```
+
+Do not inspect PostgREST error codes when `maybeSingle()` can naturally represent the "not found" case.
+
+---
+
+# Repository Implementation Style
+
+Repository methods should follow a consistent implementation pattern.
+
+Example:
+
+```ts
+const { data, error } = await supabase
+    ...
+    
+if (error) {
+    throw error;
+}
+
+return data;
+```
+
+Conventions:
+
+- Destructure `data` and `error` directly.
+- Check `error` immediately after the query.
+- Throw unexpected database errors.
+- Return `data` as the final statement.
+- Use `maybeSingle()` for lookup methods.
+- Use `single()` for insert/update/delete methods expected to affect exactly one row.
+
+---
+# Service Orchestration
+
+Complex business workflows should be orchestrated by a dedicated service.
+
+Individual services should implement a single business capability.
+
+Example:
+
+Organization onboarding is orchestrated by:
+
+```
+organization.service.ts
+```
+
+which coordinates:
+
+- Auth Service
+- User Service
+- Repositories
+
+Individual services should not orchestrate other business workflows.

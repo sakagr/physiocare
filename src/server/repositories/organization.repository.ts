@@ -16,7 +16,16 @@ export async function findOrganizationByName(
   supabase: SupabaseClient<Database>,
   name: string
 ): Promise<Organization | null> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("*")
+    .eq("organization_name", name)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 /**
@@ -30,7 +39,16 @@ export async function insertOrganization(
   supabase: SupabaseClient<Database>,
   organization: InsertOrganization
 ): Promise<Organization> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("organizations")
+    .insert(organization)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 /**
@@ -46,6 +64,41 @@ export async function updateOrganizationCreatedBy(
   organizationId: string,
   createdByUserId: string
 ): Promise<Organization> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("organizations")
+    .update({ created_by: createdByUserId })
+    .eq("id", organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
+/**
+ * Updates the operational status of an organization.
+ * 
+ * @param supabase - The Supabase client (can be client, server, or admin).
+ * @param organizationId - The ID of the organization to update.
+ * @param status - The new operational status.
+ * @returns The updated organization.
+ */
+export async function updateOrganizationStatus(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  status: Database["public"]["Enums"]["organization_status"]
+): Promise<Organization> {
+  const { data, error } = await supabase
+    .from("organizations")
+    .update({ status })
+    .eq("id", organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}

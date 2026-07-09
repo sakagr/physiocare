@@ -4,1459 +4,1414 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
 export type Database = {
   graphql_public: {
     Tables: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
       graphql: {
         Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
     Enums: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       appointment_status_logs: {
         Row: {
-          appointment_id: string;
-          changed_at: string;
-          changed_by: string | null;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          new_status: Database["public"]["Enums"]["appointment_status"];
-          old_status: Database["public"]["Enums"]["appointment_status"] | null;
-          organization_id: string;
-          updated_at: string;
-        };
+          appointment_id: string
+          changed_at: string
+          changed_by: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          new_status: Database["public"]["Enums"]["appointment_status"]
+          old_status: Database["public"]["Enums"]["appointment_status"] | null
+          organization_id: string
+          updated_at: string
+        }
         Insert: {
-          appointment_id: string;
-          changed_at?: string;
-          changed_by?: string | null;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          new_status: Database["public"]["Enums"]["appointment_status"];
-          old_status?: Database["public"]["Enums"]["appointment_status"] | null;
-          organization_id: string;
-          updated_at?: string;
-        };
+          appointment_id: string
+          changed_at?: string
+          changed_by?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          new_status: Database["public"]["Enums"]["appointment_status"]
+          old_status?: Database["public"]["Enums"]["appointment_status"] | null
+          organization_id: string
+          updated_at?: string
+        }
         Update: {
-          appointment_id?: string;
-          changed_at?: string;
-          changed_by?: string | null;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          new_status?: Database["public"]["Enums"]["appointment_status"];
-          old_status?: Database["public"]["Enums"]["appointment_status"] | null;
-          organization_id?: string;
-          updated_at?: string;
-        };
+          appointment_id?: string
+          changed_at?: string
+          changed_by?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          new_status?: Database["public"]["Enums"]["appointment_status"]
+          old_status?: Database["public"]["Enums"]["appointment_status"] | null
+          organization_id?: string
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "appointment_status_logs_organization_id_appointment_id_fkey";
-            columns: ["organization_id", "appointment_id"];
-            isOneToOne: false;
-            referencedRelation: "appointments";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "appointment_status_logs_organization_id_appointment_id_fkey"
+            columns: ["organization_id", "appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "appointment_status_logs_organization_id_changed_by_fkey";
-            columns: ["organization_id", "changed_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "appointment_status_logs_organization_id_changed_by_fkey"
+            columns: ["organization_id", "changed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "appointment_status_logs_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "appointment_status_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       appointments: {
         Row: {
-          appointment_time: string;
-          appointment_type: Database["public"]["Enums"]["appointment_type"];
-          clinic_id: string;
-          created_at: string;
-          created_by: string | null;
-          deleted_at: string | null;
-          id: string;
-          notes: string | null;
-          organization_id: string;
-          patient_id: string;
-          physiotherapist_id: string;
-          status: Database["public"]["Enums"]["appointment_status"];
-          updated_at: string;
-        };
+          appointment_time: string
+          appointment_type: Database["public"]["Enums"]["appointment_type"]
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          patient_id: string
+          physiotherapist_id: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+        }
         Insert: {
-          appointment_time: string;
-          appointment_type?: Database["public"]["Enums"]["appointment_type"];
-          clinic_id: string;
-          created_at?: string;
-          created_by?: string | null;
-          deleted_at?: string | null;
-          id?: string;
-          notes?: string | null;
-          organization_id: string;
-          patient_id: string;
-          physiotherapist_id: string;
-          status?: Database["public"]["Enums"]["appointment_status"];
-          updated_at?: string;
-        };
+          appointment_time: string
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          clinic_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          patient_id: string
+          physiotherapist_id: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+        }
         Update: {
-          appointment_time?: string;
-          appointment_type?: Database["public"]["Enums"]["appointment_type"];
-          clinic_id?: string;
-          created_at?: string;
-          created_by?: string | null;
-          deleted_at?: string | null;
-          id?: string;
-          notes?: string | null;
-          organization_id?: string;
-          patient_id?: string;
-          physiotherapist_id?: string;
-          status?: Database["public"]["Enums"]["appointment_status"];
-          updated_at?: string;
-        };
+          appointment_time?: string
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          clinic_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          patient_id?: string
+          physiotherapist_id?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "appointments_organization_id_clinic_id_fkey";
-            columns: ["organization_id", "clinic_id"];
-            isOneToOne: false;
-            referencedRelation: "clinics";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "appointments_organization_id_clinic_id_fkey"
+            columns: ["organization_id", "clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "appointments_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "appointments_organization_id_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "appointments_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "appointments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "appointments_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "appointments_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "appointments_organization_id_physiotherapist_id_fkey";
-            columns: ["organization_id", "physiotherapist_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "appointments_organization_id_physiotherapist_id_fkey"
+            columns: ["organization_id", "physiotherapist_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       audit_logs: {
         Row: {
-          action: string;
-          created_at: string;
-          deleted_at: string | null;
-          entity_id: string;
-          entity_name: string;
-          id: string;
-          new_data: Json | null;
-          old_data: Json | null;
-          organization_id: string;
-          updated_at: string;
-          user_id: string | null;
-        };
+          action: string
+          created_at: string
+          deleted_at: string | null
+          entity_id: string
+          entity_name: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          organization_id: string
+          updated_at: string
+          user_id: string | null
+        }
         Insert: {
-          action: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          entity_id: string;
-          entity_name: string;
-          id?: string;
-          new_data?: Json | null;
-          old_data?: Json | null;
-          organization_id: string;
-          updated_at?: string;
-          user_id?: string | null;
-        };
+          action: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id: string
+          entity_name: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          organization_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
         Update: {
-          action?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          entity_id?: string;
-          entity_name?: string;
-          id?: string;
-          new_data?: Json | null;
-          old_data?: Json | null;
-          organization_id?: string;
-          updated_at?: string;
-          user_id?: string | null;
-        };
+          action?: string
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string
+          entity_name?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          organization_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
         Relationships: [
           {
-            foreignKeyName: "audit_logs_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "audit_logs_organization_id_user_id_fkey";
-            columns: ["organization_id", "user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "audit_logs_organization_id_user_id_fkey"
+            columns: ["organization_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       clinics: {
         Row: {
-          address: string | null;
-          city: string | null;
-          clinic_name: string;
-          created_at: string;
-          deleted_at: string | null;
-          email: string | null;
-          gst_number: string | null;
-          id: string;
-          is_active: boolean;
-          organization_id: string;
-          phone: string | null;
-          pincode: string | null;
-          state: string | null;
-          updated_at: string;
-        };
+          address: string | null
+          city: string | null
+          clinic_name: string
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          gst_number: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          phone: string | null
+          pincode: string | null
+          state: string | null
+          updated_at: string
+        }
         Insert: {
-          address?: string | null;
-          city?: string | null;
-          clinic_name: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          email?: string | null;
-          gst_number?: string | null;
-          id?: string;
-          is_active?: boolean;
-          organization_id: string;
-          phone?: string | null;
-          pincode?: string | null;
-          state?: string | null;
-          updated_at?: string;
-        };
+          address?: string | null
+          city?: string | null
+          clinic_name: string
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          gst_number?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          phone?: string | null
+          pincode?: string | null
+          state?: string | null
+          updated_at?: string
+        }
         Update: {
-          address?: string | null;
-          city?: string | null;
-          clinic_name?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          email?: string | null;
-          gst_number?: string | null;
-          id?: string;
-          is_active?: boolean;
-          organization_id?: string;
-          phone?: string | null;
-          pincode?: string | null;
-          state?: string | null;
-          updated_at?: string;
-        };
+          address?: string | null
+          city?: string | null
+          clinic_name?: string
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          gst_number?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          phone?: string | null
+          pincode?: string | null
+          state?: string | null
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "clinics_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "clinics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       consultations: {
         Row: {
-          appointment_id: string;
-          created_at: string;
-          diagnosis_notes: string | null;
-          followup_notes: string | null;
-          id: string;
-          organization_id: string;
-          pain_areas: Json;
-          pain_scale: number | null;
-          patient_id: string;
-          physiotherapist_id: string;
-          symptoms: string | null;
-          updated_at: string;
-        };
+          appointment_id: string
+          created_at: string
+          diagnosis_notes: string | null
+          followup_notes: string | null
+          id: string
+          organization_id: string
+          pain_areas: Json
+          pain_scale: number | null
+          patient_id: string
+          physiotherapist_id: string
+          symptoms: string | null
+          updated_at: string
+        }
         Insert: {
-          appointment_id: string;
-          created_at?: string;
-          diagnosis_notes?: string | null;
-          followup_notes?: string | null;
-          id?: string;
-          organization_id: string;
-          pain_areas?: Json;
-          pain_scale?: number | null;
-          patient_id: string;
-          physiotherapist_id: string;
-          symptoms?: string | null;
-          updated_at?: string;
-        };
+          appointment_id: string
+          created_at?: string
+          diagnosis_notes?: string | null
+          followup_notes?: string | null
+          id?: string
+          organization_id: string
+          pain_areas?: Json
+          pain_scale?: number | null
+          patient_id: string
+          physiotherapist_id: string
+          symptoms?: string | null
+          updated_at?: string
+        }
         Update: {
-          appointment_id?: string;
-          created_at?: string;
-          diagnosis_notes?: string | null;
-          followup_notes?: string | null;
-          id?: string;
-          organization_id?: string;
-          pain_areas?: Json;
-          pain_scale?: number | null;
-          patient_id?: string;
-          physiotherapist_id?: string;
-          symptoms?: string | null;
-          updated_at?: string;
-        };
+          appointment_id?: string
+          created_at?: string
+          diagnosis_notes?: string | null
+          followup_notes?: string | null
+          id?: string
+          organization_id?: string
+          pain_areas?: Json
+          pain_scale?: number | null
+          patient_id?: string
+          physiotherapist_id?: string
+          symptoms?: string | null
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "consultations_organization_id_appointment_id_fkey";
-            columns: ["organization_id", "appointment_id"];
-            isOneToOne: true;
-            referencedRelation: "appointments";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "consultations_organization_id_appointment_id_fkey"
+            columns: ["organization_id", "appointment_id"]
+            isOneToOne: true
+            referencedRelation: "appointments"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "consultations_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "consultations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "consultations_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "consultations_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "consultations_organization_id_physiotherapist_id_fkey";
-            columns: ["organization_id", "physiotherapist_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "consultations_organization_id_physiotherapist_id_fkey"
+            columns: ["organization_id", "physiotherapist_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       currencies: {
         Row: {
-          code: string;
-          created_at: string;
-          decimal_places: number;
-          is_active: boolean;
-          locale: string | null;
-          name: string;
-          symbol: string;
-          updated_at: string;
-        };
+          code: string
+          created_at: string
+          decimal_places: number
+          is_active: boolean
+          locale: string | null
+          name: string
+          symbol: string
+          updated_at: string
+        }
         Insert: {
-          code: string;
-          created_at?: string;
-          decimal_places?: number;
-          is_active?: boolean;
-          locale?: string | null;
-          name: string;
-          symbol: string;
-          updated_at?: string;
-        };
+          code: string
+          created_at?: string
+          decimal_places?: number
+          is_active?: boolean
+          locale?: string | null
+          name: string
+          symbol: string
+          updated_at?: string
+        }
         Update: {
-          code?: string;
-          created_at?: string;
-          decimal_places?: number;
-          is_active?: boolean;
-          locale?: string | null;
-          name?: string;
-          symbol?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
+          code?: string
+          created_at?: string
+          decimal_places?: number
+          is_active?: boolean
+          locale?: string | null
+          name?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoice_items: {
         Row: {
-          created_at: string;
-          deleted_at: string | null;
-          gst_percent: number;
-          id: string;
-          invoice_id: string;
-          item_name: string;
-          organization_id: string;
-          quantity: number;
-          total: number;
-          unit_price: number;
-          updated_at: string;
-        };
+          created_at: string
+          deleted_at: string | null
+          gst_percent: number
+          id: string
+          invoice_id: string
+          item_name: string
+          organization_id: string
+          quantity: number
+          total: number
+          unit_price: number
+          updated_at: string
+        }
         Insert: {
-          created_at?: string;
-          deleted_at?: string | null;
-          gst_percent?: number;
-          id?: string;
-          invoice_id: string;
-          item_name: string;
-          organization_id: string;
-          quantity: number;
-          total: number;
-          unit_price: number;
-          updated_at?: string;
-        };
+          created_at?: string
+          deleted_at?: string | null
+          gst_percent?: number
+          id?: string
+          invoice_id: string
+          item_name: string
+          organization_id: string
+          quantity: number
+          total: number
+          unit_price: number
+          updated_at?: string
+        }
         Update: {
-          created_at?: string;
-          deleted_at?: string | null;
-          gst_percent?: number;
-          id?: string;
-          invoice_id?: string;
-          item_name?: string;
-          organization_id?: string;
-          quantity?: number;
-          total?: number;
-          unit_price?: number;
-          updated_at?: string;
-        };
+          created_at?: string
+          deleted_at?: string | null
+          gst_percent?: number
+          id?: string
+          invoice_id?: string
+          item_name?: string
+          organization_id?: string
+          quantity?: number
+          total?: number
+          unit_price?: number
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "invoice_items_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "invoice_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoice_items_organization_id_invoice_id_fkey";
-            columns: ["organization_id", "invoice_id"];
-            isOneToOne: false;
-            referencedRelation: "invoices";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "invoice_items_organization_id_invoice_id_fkey"
+            columns: ["organization_id", "invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       invoices: {
         Row: {
-          appointment_id: string | null;
-          clinic_id: string;
-          created_at: string;
-          created_by: string | null;
-          deleted_at: string | null;
-          discount_amount: number;
-          gst_amount: number;
-          id: string;
-          invoice_date: string;
-          invoice_number: string;
-          organization_id: string;
-          patient_id: string;
-          payment_status: Database["public"]["Enums"]["payment_status"];
-          subtotal: number;
-          total_amount: number;
-          updated_at: string;
-        };
+          appointment_id: string | null
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          discount_amount: number
+          gst_amount: number
+          id: string
+          invoice_date: string
+          invoice_number: string
+          organization_id: string
+          patient_id: string
+          payment_status: Database["public"]["Enums"]["payment_status"]
+          subtotal: number
+          total_amount: number
+          updated_at: string
+        }
         Insert: {
-          appointment_id?: string | null;
-          clinic_id: string;
-          created_at?: string;
-          created_by?: string | null;
-          deleted_at?: string | null;
-          discount_amount?: number;
-          gst_amount?: number;
-          id?: string;
-          invoice_date?: string;
-          invoice_number: string;
-          organization_id: string;
-          patient_id: string;
-          payment_status?: Database["public"]["Enums"]["payment_status"];
-          subtotal?: number;
-          total_amount?: number;
-          updated_at?: string;
-        };
+          appointment_id?: string | null
+          clinic_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          discount_amount?: number
+          gst_amount?: number
+          id?: string
+          invoice_date?: string
+          invoice_number: string
+          organization_id: string
+          patient_id: string
+          payment_status?: Database["public"]["Enums"]["payment_status"]
+          subtotal?: number
+          total_amount?: number
+          updated_at?: string
+        }
         Update: {
-          appointment_id?: string | null;
-          clinic_id?: string;
-          created_at?: string;
-          created_by?: string | null;
-          deleted_at?: string | null;
-          discount_amount?: number;
-          gst_amount?: number;
-          id?: string;
-          invoice_date?: string;
-          invoice_number?: string;
-          organization_id?: string;
-          patient_id?: string;
-          payment_status?: Database["public"]["Enums"]["payment_status"];
-          subtotal?: number;
-          total_amount?: number;
-          updated_at?: string;
-        };
+          appointment_id?: string | null
+          clinic_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          discount_amount?: number
+          gst_amount?: number
+          id?: string
+          invoice_date?: string
+          invoice_number?: string
+          organization_id?: string
+          patient_id?: string
+          payment_status?: Database["public"]["Enums"]["payment_status"]
+          subtotal?: number
+          total_amount?: number
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "invoices_organization_id_appointment_id_fkey";
-            columns: ["organization_id", "appointment_id"];
-            isOneToOne: false;
-            referencedRelation: "appointments";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "invoices_organization_id_appointment_id_fkey"
+            columns: ["organization_id", "appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "invoices_organization_id_clinic_id_fkey";
-            columns: ["organization_id", "clinic_id"];
-            isOneToOne: false;
-            referencedRelation: "clinics";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "invoices_organization_id_clinic_id_fkey"
+            columns: ["organization_id", "clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "invoices_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "invoices_organization_id_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "invoices_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "invoices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "invoices_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "invoices_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       notifications: {
         Row: {
-          appointment_id: string | null;
-          channel: Database["public"]["Enums"]["notification_channel"];
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          message: string;
-          notification_type: string;
-          organization_id: string;
-          patient_id: string | null;
-          recipient_type: Database["public"]["Enums"]["recipient_type"];
-          sent_at: string | null;
-          status: Database["public"]["Enums"]["notification_status"];
-          updated_at: string;
-          user_id: string | null;
-        };
+          appointment_id: string | null
+          channel: Database["public"]["Enums"]["notification_channel"]
+          created_at: string
+          deleted_at: string | null
+          id: string
+          message: string
+          notification_type: string
+          organization_id: string
+          patient_id: string | null
+          recipient_type: Database["public"]["Enums"]["recipient_type"]
+          sent_at: string | null
+          status: Database["public"]["Enums"]["notification_status"]
+          updated_at: string
+          user_id: string | null
+        }
         Insert: {
-          appointment_id?: string | null;
-          channel: Database["public"]["Enums"]["notification_channel"];
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          message: string;
-          notification_type: string;
-          organization_id: string;
-          patient_id?: string | null;
-          recipient_type: Database["public"]["Enums"]["recipient_type"];
-          sent_at?: string | null;
-          status?: Database["public"]["Enums"]["notification_status"];
-          updated_at?: string;
-          user_id?: string | null;
-        };
+          appointment_id?: string | null
+          channel: Database["public"]["Enums"]["notification_channel"]
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          message: string
+          notification_type: string
+          organization_id: string
+          patient_id?: string | null
+          recipient_type: Database["public"]["Enums"]["recipient_type"]
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["notification_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
         Update: {
-          appointment_id?: string | null;
-          channel?: Database["public"]["Enums"]["notification_channel"];
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          message?: string;
-          notification_type?: string;
-          organization_id?: string;
-          patient_id?: string | null;
-          recipient_type?: Database["public"]["Enums"]["recipient_type"];
-          sent_at?: string | null;
-          status?: Database["public"]["Enums"]["notification_status"];
-          updated_at?: string;
-          user_id?: string | null;
-        };
+          appointment_id?: string | null
+          channel?: Database["public"]["Enums"]["notification_channel"]
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          message?: string
+          notification_type?: string
+          organization_id?: string
+          patient_id?: string | null
+          recipient_type?: Database["public"]["Enums"]["recipient_type"]
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["notification_status"]
+          updated_at?: string
+          user_id?: string | null
+        }
         Relationships: [
           {
-            foreignKeyName: "notifications_organization_id_appointment_id_fkey";
-            columns: ["organization_id", "appointment_id"];
-            isOneToOne: false;
-            referencedRelation: "appointments";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "notifications_organization_id_appointment_id_fkey"
+            columns: ["organization_id", "appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "notifications_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "notifications_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "notifications_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "notifications_organization_id_user_id_fkey";
-            columns: ["organization_id", "user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "notifications_organization_id_user_id_fkey"
+            columns: ["organization_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
-      organization_users: {
-        Row: {
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          organization_id: string;
-          organization_role: Database["public"]["Enums"]["app_role"];
-          updated_at: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          organization_id: string;
-          organization_role: Database["public"]["Enums"]["app_role"];
-          updated_at?: string;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          organization_id?: string;
-          organization_role?: Database["public"]["Enums"]["app_role"];
-          updated_at?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "organization_users_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "organization_users_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
+        ]
+      }
       organizations: {
         Row: {
-          created_at: string;
-          created_by: string | null;
-          default_currency_code: string | null;
-          deleted_at: string | null;
-          id: string;
-          organization_name: string;
-          subscription_ends_at: string | null;
-          subscription_plan_id: string | null;
-          subscription_starts_at: string | null;
-          subscription_status: Database["public"]["Enums"]["subscription_status"];
-          trial_ends_at: string | null;
-          updated_at: string;
-        };
+          created_at: string
+          created_by: string | null
+          default_currency_code: string | null
+          deleted_at: string | null
+          id: string
+          organization_name: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_ends_at: string | null
+          subscription_plan_id: string | null
+          subscription_starts_at: string | null
+          subscription_status: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at: string | null
+          updated_at: string
+        }
         Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          default_currency_code?: string | null;
-          deleted_at?: string | null;
-          id?: string;
-          organization_name: string;
-          subscription_ends_at?: string | null;
-          subscription_plan_id?: string | null;
-          subscription_starts_at?: string | null;
-          subscription_status?: Database["public"]["Enums"]["subscription_status"];
-          trial_ends_at?: string | null;
-          updated_at?: string;
-        };
+          created_at?: string
+          created_by?: string | null
+          default_currency_code?: string | null
+          deleted_at?: string | null
+          id?: string
+          organization_name: string
+          status?: Database["public"]["Enums"]["organization_status"]
+          subscription_ends_at?: string | null
+          subscription_plan_id?: string | null
+          subscription_starts_at?: string | null
+          subscription_status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
         Update: {
-          created_at?: string;
-          created_by?: string | null;
-          default_currency_code?: string | null;
-          deleted_at?: string | null;
-          id?: string;
-          organization_name?: string;
-          subscription_ends_at?: string | null;
-          subscription_plan_id?: string | null;
-          subscription_starts_at?: string | null;
-          subscription_status?: Database["public"]["Enums"]["subscription_status"];
-          trial_ends_at?: string | null;
-          updated_at?: string;
-        };
+          created_at?: string
+          created_by?: string | null
+          default_currency_code?: string | null
+          deleted_at?: string | null
+          id?: string
+          organization_name?: string
+          status?: Database["public"]["Enums"]["organization_status"]
+          subscription_ends_at?: string | null
+          subscription_plan_id?: string | null
+          subscription_starts_at?: string | null
+          subscription_status?: Database["public"]["Enums"]["subscription_status"]
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "organizations_created_by_fkey";
-            columns: ["created_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["id"];
+            foreignKeyName: "organizations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "organizations_default_currency_code_fkey";
-            columns: ["default_currency_code"];
-            isOneToOne: false;
-            referencedRelation: "currencies";
-            referencedColumns: ["code"];
+            foreignKeyName: "organizations_default_currency_code_fkey"
+            columns: ["default_currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
           },
           {
-            foreignKeyName: "organizations_subscription_plan_id_fkey";
-            columns: ["subscription_plan_id"];
-            isOneToOne: false;
-            referencedRelation: "subscription_plans";
-            referencedColumns: ["id"];
+            foreignKeyName: "organizations_subscription_plan_id_fkey"
+            columns: ["subscription_plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       package_session_usage: {
         Row: {
-          appointment_id: string;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          organization_id: string;
-          patient_package_id: string;
-          updated_at: string;
-          used_on: string;
-        };
+          appointment_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          organization_id: string
+          patient_package_id: string
+          updated_at: string
+          used_on: string
+        }
         Insert: {
-          appointment_id: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          organization_id: string;
-          patient_package_id: string;
-          updated_at?: string;
-          used_on?: string;
-        };
+          appointment_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id: string
+          patient_package_id: string
+          updated_at?: string
+          used_on?: string
+        }
         Update: {
-          appointment_id?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          organization_id?: string;
-          patient_package_id?: string;
-          updated_at?: string;
-          used_on?: string;
-        };
+          appointment_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id?: string
+          patient_package_id?: string
+          updated_at?: string
+          used_on?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "package_session_usage_organization_id_appointment_id_fkey";
-            columns: ["organization_id", "appointment_id"];
-            isOneToOne: false;
-            referencedRelation: "appointments";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "package_session_usage_organization_id_appointment_id_fkey"
+            columns: ["organization_id", "appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "package_session_usage_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "package_session_usage_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "package_session_usage_organization_id_patient_package_id_fkey";
-            columns: ["organization_id", "patient_package_id"];
-            isOneToOne: false;
-            referencedRelation: "patient_packages";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "package_session_usage_organization_id_patient_package_id_fkey"
+            columns: ["organization_id", "patient_package_id"]
+            isOneToOne: false
+            referencedRelation: "patient_packages"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       packages: {
         Row: {
-          clinic_id: string;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          is_active: boolean;
-          organization_id: string;
-          package_name: string;
-          package_price: number;
-          total_sessions: number;
-          updated_at: string;
-          validity_days: number;
-        };
+          clinic_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          package_name: string
+          package_price: number
+          total_sessions: number
+          updated_at: string
+          validity_days: number
+        }
         Insert: {
-          clinic_id: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          is_active?: boolean;
-          organization_id: string;
-          package_name: string;
-          package_price: number;
-          total_sessions: number;
-          updated_at?: string;
-          validity_days: number;
-        };
+          clinic_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          package_name: string
+          package_price: number
+          total_sessions: number
+          updated_at?: string
+          validity_days: number
+        }
         Update: {
-          clinic_id?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          is_active?: boolean;
-          organization_id?: string;
-          package_name?: string;
-          package_price?: number;
-          total_sessions?: number;
-          updated_at?: string;
-          validity_days?: number;
-        };
+          clinic_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          package_name?: string
+          package_price?: number
+          total_sessions?: number
+          updated_at?: string
+          validity_days?: number
+        }
         Relationships: [
           {
-            foreignKeyName: "packages_organization_id_clinic_id_fkey";
-            columns: ["organization_id", "clinic_id"];
-            isOneToOne: false;
-            referencedRelation: "clinics";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "packages_organization_id_clinic_id_fkey"
+            columns: ["organization_id", "clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "packages_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "packages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       patient_packages: {
         Row: {
-          created_at: string;
-          expiry_date: string;
-          extended_validity_to: string | null;
-          id: string;
-          organization_id: string;
-          package_id: string;
-          patient_id: string;
-          purchased_on: string;
-          remaining_sessions: number;
-          status: Database["public"]["Enums"]["package_status"];
-          total_sessions: number;
-          updated_at: string;
-          used_sessions: number;
-        };
+          created_at: string
+          expiry_date: string
+          extended_validity_to: string | null
+          id: string
+          organization_id: string
+          package_id: string
+          patient_id: string
+          purchased_on: string
+          remaining_sessions: number
+          status: Database["public"]["Enums"]["package_status"]
+          total_sessions: number
+          updated_at: string
+          used_sessions: number
+        }
         Insert: {
-          created_at?: string;
-          expiry_date: string;
-          extended_validity_to?: string | null;
-          id?: string;
-          organization_id: string;
-          package_id: string;
-          patient_id: string;
-          purchased_on?: string;
-          remaining_sessions: number;
-          status?: Database["public"]["Enums"]["package_status"];
-          total_sessions: number;
-          updated_at?: string;
-          used_sessions?: number;
-        };
+          created_at?: string
+          expiry_date: string
+          extended_validity_to?: string | null
+          id?: string
+          organization_id: string
+          package_id: string
+          patient_id: string
+          purchased_on?: string
+          remaining_sessions: number
+          status?: Database["public"]["Enums"]["package_status"]
+          total_sessions: number
+          updated_at?: string
+          used_sessions?: number
+        }
         Update: {
-          created_at?: string;
-          expiry_date?: string;
-          extended_validity_to?: string | null;
-          id?: string;
-          organization_id?: string;
-          package_id?: string;
-          patient_id?: string;
-          purchased_on?: string;
-          remaining_sessions?: number;
-          status?: Database["public"]["Enums"]["package_status"];
-          total_sessions?: number;
-          updated_at?: string;
-          used_sessions?: number;
-        };
+          created_at?: string
+          expiry_date?: string
+          extended_validity_to?: string | null
+          id?: string
+          organization_id?: string
+          package_id?: string
+          patient_id?: string
+          purchased_on?: string
+          remaining_sessions?: number
+          status?: Database["public"]["Enums"]["package_status"]
+          total_sessions?: number
+          updated_at?: string
+          used_sessions?: number
+        }
         Relationships: [
           {
-            foreignKeyName: "patient_packages_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "patient_packages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "patient_packages_organization_id_package_id_fkey";
-            columns: ["organization_id", "package_id"];
-            isOneToOne: false;
-            referencedRelation: "packages";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "patient_packages_organization_id_package_id_fkey"
+            columns: ["organization_id", "package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "patient_packages_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "patient_packages_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       patient_records: {
         Row: {
-          created_at: string;
-          file_url: string;
-          id: string;
-          notes: string | null;
-          organization_id: string;
-          patient_id: string;
-          record_type: string;
-          title: string;
-          updated_at: string;
-          uploaded_by: string | null;
-        };
+          created_at: string
+          file_url: string
+          id: string
+          notes: string | null
+          organization_id: string
+          patient_id: string
+          record_type: string
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
         Insert: {
-          created_at?: string;
-          file_url: string;
-          id?: string;
-          notes?: string | null;
-          organization_id: string;
-          patient_id: string;
-          record_type: string;
-          title: string;
-          updated_at?: string;
-          uploaded_by?: string | null;
-        };
+          created_at?: string
+          file_url: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          patient_id: string
+          record_type: string
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
         Update: {
-          created_at?: string;
-          file_url?: string;
-          id?: string;
-          notes?: string | null;
-          organization_id?: string;
-          patient_id?: string;
-          record_type?: string;
-          title?: string;
-          updated_at?: string;
-          uploaded_by?: string | null;
-        };
+          created_at?: string
+          file_url?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          patient_id?: string
+          record_type?: string
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
         Relationships: [
           {
-            foreignKeyName: "patient_records_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "patient_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "patient_records_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "patient_records_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "patient_records_organization_id_uploaded_by_fkey";
-            columns: ["organization_id", "uploaded_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "patient_records_organization_id_uploaded_by_fkey"
+            columns: ["organization_id", "uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       patients: {
         Row: {
-          address: string | null;
-          created_at: string;
-          created_by: string | null;
-          deleted_at: string | null;
-          dob: string | null;
-          email: string | null;
-          emergency_contact: string | null;
-          full_name: string;
-          gender: Database["public"]["Enums"]["patient_gender"] | null;
-          id: string;
-          organization_id: string;
-          patient_code: string;
-          phone: string | null;
-          updated_at: string;
-        };
+          address: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dob: string | null
+          email: string | null
+          emergency_contact: string | null
+          full_name: string
+          gender: Database["public"]["Enums"]["patient_gender"] | null
+          id: string
+          organization_id: string
+          patient_code: string
+          phone: string | null
+          updated_at: string
+        }
         Insert: {
-          address?: string | null;
-          created_at?: string;
-          created_by?: string | null;
-          deleted_at?: string | null;
-          dob?: string | null;
-          email?: string | null;
-          emergency_contact?: string | null;
-          full_name: string;
-          gender?: Database["public"]["Enums"]["patient_gender"] | null;
-          id?: string;
-          organization_id: string;
-          patient_code: string;
-          phone?: string | null;
-          updated_at?: string;
-        };
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dob?: string | null
+          email?: string | null
+          emergency_contact?: string | null
+          full_name: string
+          gender?: Database["public"]["Enums"]["patient_gender"] | null
+          id?: string
+          organization_id: string
+          patient_code: string
+          phone?: string | null
+          updated_at?: string
+        }
         Update: {
-          address?: string | null;
-          created_at?: string;
-          created_by?: string | null;
-          deleted_at?: string | null;
-          dob?: string | null;
-          email?: string | null;
-          emergency_contact?: string | null;
-          full_name?: string;
-          gender?: Database["public"]["Enums"]["patient_gender"] | null;
-          id?: string;
-          organization_id?: string;
-          patient_code?: string;
-          phone?: string | null;
-          updated_at?: string;
-        };
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dob?: string | null
+          email?: string | null
+          emergency_contact?: string | null
+          full_name?: string
+          gender?: Database["public"]["Enums"]["patient_gender"] | null
+          id?: string
+          organization_id?: string
+          patient_code?: string
+          phone?: string | null
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "patients_organization_id_created_by_fkey";
-            columns: ["organization_id", "created_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "patients_organization_id_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "patients_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "patients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
       payments: {
         Row: {
-          amount: number;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          invoice_id: string;
-          organization_id: string;
-          paid_at: string;
-          payment_mode: Database["public"]["Enums"]["payment_mode"];
-          received_by: string | null;
-          transaction_reference: string | null;
-          updated_at: string;
-        };
+          amount: number
+          created_at: string
+          deleted_at: string | null
+          id: string
+          invoice_id: string
+          organization_id: string
+          paid_at: string
+          payment_mode: Database["public"]["Enums"]["payment_mode"]
+          received_by: string | null
+          transaction_reference: string | null
+          updated_at: string
+        }
         Insert: {
-          amount: number;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          invoice_id: string;
-          organization_id: string;
-          paid_at?: string;
-          payment_mode: Database["public"]["Enums"]["payment_mode"];
-          received_by?: string | null;
-          transaction_reference?: string | null;
-          updated_at?: string;
-        };
+          amount: number
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          invoice_id: string
+          organization_id: string
+          paid_at?: string
+          payment_mode: Database["public"]["Enums"]["payment_mode"]
+          received_by?: string | null
+          transaction_reference?: string | null
+          updated_at?: string
+        }
         Update: {
-          amount?: number;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          invoice_id?: string;
-          organization_id?: string;
-          paid_at?: string;
-          payment_mode?: Database["public"]["Enums"]["payment_mode"];
-          received_by?: string | null;
-          transaction_reference?: string | null;
-          updated_at?: string;
-        };
+          amount?: number
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          invoice_id?: string
+          organization_id?: string
+          paid_at?: string
+          payment_mode?: Database["public"]["Enums"]["payment_mode"]
+          received_by?: string | null
+          transaction_reference?: string | null
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "payments_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "payments_organization_id_invoice_id_fkey";
-            columns: ["organization_id", "invoice_id"];
-            isOneToOne: false;
-            referencedRelation: "invoices";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "payments_organization_id_invoice_id_fkey"
+            columns: ["organization_id", "invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "payments_organization_id_received_by_fkey";
-            columns: ["organization_id", "received_by"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "payments_organization_id_received_by_fkey"
+            columns: ["organization_id", "received_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       prescriptions: {
         Row: {
-          advice: string | null;
-          consultation_id: string;
-          created_at: string;
-          followup_date: string | null;
-          id: string;
-          organization_id: string;
-          patient_id: string;
-          physiotherapist_id: string;
-          updated_at: string;
-        };
+          advice: string | null
+          consultation_id: string
+          created_at: string
+          followup_date: string | null
+          id: string
+          organization_id: string
+          patient_id: string
+          physiotherapist_id: string
+          updated_at: string
+        }
         Insert: {
-          advice?: string | null;
-          consultation_id: string;
-          created_at?: string;
-          followup_date?: string | null;
-          id?: string;
-          organization_id: string;
-          patient_id: string;
-          physiotherapist_id: string;
-          updated_at?: string;
-        };
+          advice?: string | null
+          consultation_id: string
+          created_at?: string
+          followup_date?: string | null
+          id?: string
+          organization_id: string
+          patient_id: string
+          physiotherapist_id: string
+          updated_at?: string
+        }
         Update: {
-          advice?: string | null;
-          consultation_id?: string;
-          created_at?: string;
-          followup_date?: string | null;
-          id?: string;
-          organization_id?: string;
-          patient_id?: string;
-          physiotherapist_id?: string;
-          updated_at?: string;
-        };
+          advice?: string | null
+          consultation_id?: string
+          created_at?: string
+          followup_date?: string | null
+          id?: string
+          organization_id?: string
+          patient_id?: string
+          physiotherapist_id?: string
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "prescriptions_organization_id_consultation_id_fkey";
-            columns: ["organization_id", "consultation_id"];
-            isOneToOne: false;
-            referencedRelation: "consultations";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "prescriptions_organization_id_consultation_id_fkey"
+            columns: ["organization_id", "consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultations"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "prescriptions_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "prescriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "prescriptions_organization_id_patient_id_fkey";
-            columns: ["organization_id", "patient_id"];
-            isOneToOne: false;
-            referencedRelation: "patients";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "prescriptions_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "prescriptions_organization_id_physiotherapist_id_fkey";
-            columns: ["organization_id", "physiotherapist_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "prescriptions_organization_id_physiotherapist_id_fkey"
+            columns: ["organization_id", "physiotherapist_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       roles: {
         Row: {
-          created_at: string;
-          id: string;
-          name: Database["public"]["Enums"]["app_role"];
-          updated_at: string;
-        };
+          created_at: string
+          id: string
+          name: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+        }
         Insert: {
-          created_at?: string;
-          id?: string;
-          name: Database["public"]["Enums"]["app_role"];
-          updated_at?: string;
-        };
+          created_at?: string
+          id?: string
+          name: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
         Update: {
-          created_at?: string;
-          id?: string;
-          name?: Database["public"]["Enums"]["app_role"];
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
+          created_at?: string
+          id?: string
+          name?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subscription_plans: {
         Row: {
-          created_at: string;
-          deleted_at: string | null;
-          features: Json;
-          id: string;
-          max_clinics: number;
-          max_users: number;
-          monthly_price: number;
-          plan_name: string;
-          updated_at: string;
-          yearly_price: number;
-        };
+          created_at: string
+          deleted_at: string | null
+          features: Json
+          id: string
+          max_clinics: number
+          max_users: number
+          monthly_price: number
+          plan_name: string
+          updated_at: string
+          yearly_price: number
+        }
         Insert: {
-          created_at?: string;
-          deleted_at?: string | null;
-          features?: Json;
-          id?: string;
-          max_clinics: number;
-          max_users: number;
-          monthly_price?: number;
-          plan_name: string;
-          updated_at?: string;
-          yearly_price?: number;
-        };
+          created_at?: string
+          deleted_at?: string | null
+          features?: Json
+          id?: string
+          max_clinics: number
+          max_users: number
+          monthly_price?: number
+          plan_name: string
+          updated_at?: string
+          yearly_price?: number
+        }
         Update: {
-          created_at?: string;
-          deleted_at?: string | null;
-          features?: Json;
-          id?: string;
-          max_clinics?: number;
-          max_users?: number;
-          monthly_price?: number;
-          plan_name?: string;
-          updated_at?: string;
-          yearly_price?: number;
-        };
-        Relationships: [];
-      };
+          created_at?: string
+          deleted_at?: string | null
+          features?: Json
+          id?: string
+          max_clinics?: number
+          max_users?: number
+          monthly_price?: number
+          plan_name?: string
+          updated_at?: string
+          yearly_price?: number
+        }
+        Relationships: []
+      }
       user_attendance: {
         Row: {
-          attendance_date: string;
-          check_in_time: string;
-          check_out_time: string | null;
-          clinic_id: string;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          notes: string | null;
-          organization_id: string;
-          status: Database["public"]["Enums"]["attendance_status"];
-          updated_at: string;
-          user_id: string;
-        };
+          attendance_date: string
+          check_in_time: string
+          check_out_time: string | null
+          clinic_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          status: Database["public"]["Enums"]["attendance_status"]
+          updated_at: string
+          user_id: string
+        }
         Insert: {
-          attendance_date: string;
-          check_in_time: string;
-          check_out_time?: string | null;
-          clinic_id: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          notes?: string | null;
-          organization_id: string;
-          status?: Database["public"]["Enums"]["attendance_status"];
-          updated_at?: string;
-          user_id: string;
-        };
+          attendance_date: string
+          check_in_time: string
+          check_out_time?: string | null
+          clinic_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          status?: Database["public"]["Enums"]["attendance_status"]
+          updated_at?: string
+          user_id: string
+        }
         Update: {
-          attendance_date?: string;
-          check_in_time?: string;
-          check_out_time?: string | null;
-          clinic_id?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          notes?: string | null;
-          organization_id?: string;
-          status?: Database["public"]["Enums"]["attendance_status"];
-          updated_at?: string;
-          user_id?: string;
-        };
+          attendance_date?: string
+          check_in_time?: string
+          check_out_time?: string | null
+          clinic_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          status?: Database["public"]["Enums"]["attendance_status"]
+          updated_at?: string
+          user_id?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "user_attendance_organization_id_clinic_id_fkey";
-            columns: ["organization_id", "clinic_id"];
-            isOneToOne: false;
-            referencedRelation: "clinics";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "user_attendance_organization_id_clinic_id_fkey"
+            columns: ["organization_id", "clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "user_attendance_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "user_attendance_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_attendance_organization_id_user_id_fkey";
-            columns: ["organization_id", "user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "user_attendance_organization_id_user_id_fkey"
+            columns: ["organization_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       user_clinics: {
         Row: {
-          assigned_at: string;
-          clinic_id: string;
-          created_at: string;
-          deleted_at: string | null;
-          id: string;
-          organization_id: string;
-          updated_at: string;
-          user_id: string;
-        };
+          assigned_at: string
+          clinic_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
         Insert: {
-          assigned_at?: string;
-          clinic_id: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          organization_id: string;
-          updated_at?: string;
-          user_id: string;
-        };
+          assigned_at?: string
+          clinic_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
         Update: {
-          assigned_at?: string;
-          clinic_id?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          id?: string;
-          organization_id?: string;
-          updated_at?: string;
-          user_id?: string;
-        };
+          assigned_at?: string
+          clinic_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "user_clinics_organization_id_clinic_id_fkey";
-            columns: ["organization_id", "clinic_id"];
-            isOneToOne: false;
-            referencedRelation: "clinics";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "user_clinics_organization_id_clinic_id_fkey"
+            columns: ["organization_id", "clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["organization_id", "id"]
           },
           {
-            foreignKeyName: "user_clinics_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "user_clinics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_clinics_organization_id_user_id_fkey";
-            columns: ["organization_id", "user_id"];
-            isOneToOne: false;
-            referencedRelation: "users";
-            referencedColumns: ["organization_id", "id"];
+            foreignKeyName: "user_clinics_organization_id_user_id_fkey"
+            columns: ["organization_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
           },
-        ];
-      };
+        ]
+      }
       users: {
         Row: {
-          commission_type: Database["public"]["Enums"]["commission_type"];
-          commission_value: number;
-          created_at: string;
-          deleted_at: string | null;
-          email: string;
-          full_name: string;
-          id: string;
-          is_active: boolean;
-          organization_id: string | null;
-          phone: string | null;
-          role_id: string;
-          updated_at: string;
-        };
+          commission_type: Database["public"]["Enums"]["commission_type"]
+          commission_value: number
+          created_at: string
+          deleted_at: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          organization_id: string | null
+          phone: string | null
+          role_id: string
+          updated_at: string
+        }
         Insert: {
-          commission_type?: Database["public"]["Enums"]["commission_type"];
-          commission_value?: number;
-          created_at?: string;
-          deleted_at?: string | null;
-          email: string;
-          full_name: string;
-          id: string;
-          is_active?: boolean;
-          organization_id?: string | null;
-          phone?: string | null;
-          role_id: string;
-          updated_at?: string;
-        };
+          commission_type?: Database["public"]["Enums"]["commission_type"]
+          commission_value?: number
+          created_at?: string
+          deleted_at?: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active?: boolean
+          organization_id?: string | null
+          phone?: string | null
+          role_id: string
+          updated_at?: string
+        }
         Update: {
-          commission_type?: Database["public"]["Enums"]["commission_type"];
-          commission_value?: number;
-          created_at?: string;
-          deleted_at?: string | null;
-          email?: string;
-          full_name?: string;
-          id?: string;
-          is_active?: boolean;
-          organization_id?: string | null;
-          phone?: string | null;
-          role_id?: string;
-          updated_at?: string;
-        };
+          commission_type?: Database["public"]["Enums"]["commission_type"]
+          commission_value?: number
+          created_at?: string
+          deleted_at?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          organization_id?: string | null
+          phone?: string | null
+          role_id?: string
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "users_organization_id_fkey";
-            columns: ["organization_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
+            foreignKeyName: "users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "users_role_id_fkey";
-            columns: ["role_id"];
-            isOneToOne: false;
-            referencedRelation: "roles";
-            referencedColumns: ["id"];
+            foreignKeyName: "users_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
           },
-        ];
-      };
-    };
+        ]
+      }
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
-      current_organization_id: { Args: never; Returns: string };
-      current_user_role: { Args: never; Returns: string };
-      is_super_admin: { Args: never; Returns: boolean };
-    };
+      current_organization_id: { Args: never; Returns: string }
+      current_user_role: { Args: never; Returns: string }
+      is_super_admin: { Args: never; Returns: boolean }
+    }
     Enums: {
-      app_role:
-        | "SUPER_ADMIN"
-        | "ORG_ADMIN"
-        | "RECEPTIONIST"
-        | "PHYSIOTHERAPIST";
+      app_role: "SUPER_ADMIN" | "ORG_ADMIN" | "RECEPTIONIST" | "PHYSIOTHERAPIST"
       appointment_status:
         | "scheduled"
         | "confirmed"
         | "checked_in"
         | "completed"
         | "cancelled"
-        | "no_show";
+        | "no_show"
       appointment_type:
         | "initial_consultation"
         | "follow_up"
         | "therapy_session"
-        | "assessment";
-      attendance_status: "present" | "absent" | "half_day" | "leave";
-      commission_type: "none" | "percentage" | "fixed";
-      notification_channel: "sms" | "email" | "whatsapp" | "in_app";
-      notification_status: "pending" | "sent" | "failed" | "cancelled";
-      package_status: "active" | "completed" | "expired" | "cancelled";
-      patient_gender: "female" | "male" | "other" | "prefer_not_to_say";
+        | "assessment"
+      attendance_status: "present" | "absent" | "half_day" | "leave"
+      commission_type: "none" | "percentage" | "fixed"
+      notification_channel: "sms" | "email" | "whatsapp" | "in_app"
+      notification_status: "pending" | "sent" | "failed" | "cancelled"
+      organization_status: "draft" | "active" | "inactive" | "archived"
+      package_status: "active" | "completed" | "expired" | "cancelled"
+      patient_gender: "female" | "male" | "other" | "prefer_not_to_say"
       payment_mode:
         | "cash"
         | "card"
@@ -1464,50 +1419,48 @@ export type Database = {
         | "bank_transfer"
         | "cheque"
         | "wallet"
-        | "other";
+        | "other"
       payment_status:
         | "unpaid"
         | "partially_paid"
         | "paid"
         | "refunded"
-        | "cancelled";
-      recipient_type: "user" | "patient";
+        | "cancelled"
+      recipient_type: "user" | "patient"
       subscription_status:
+        | "inactive"
         | "trialing"
         | "active"
         | "past_due"
         | "cancelled"
-        | "expired";
-    };
+        | "expired"
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-};
+      [_ in never]: never
+    }
+  }
+}
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<
-  keyof Database,
-  "public"
->];
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R;
+      Row: infer R
     }
     ? R
     : never
@@ -1515,95 +1468,95 @@ export type Tables<
         DefaultSchema["Views"])
     ? (DefaultSchema["Tables"] &
         DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R;
+        Row: infer R
       }
       ? R
       : never
-    : never;
+    : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I;
+      Insert: infer I
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I;
+        Insert: infer I
       }
       ? I
       : never
-    : never;
+    : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U;
+      Update: infer U
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U;
+        Update: infer U
       }
       ? U
       : never
-    : never;
+    : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never;
+    : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never;
+    : never
 
 export const Constants = {
   graphql_public: {
@@ -1630,6 +1583,7 @@ export const Constants = {
       commission_type: ["none", "percentage", "fixed"],
       notification_channel: ["sms", "email", "whatsapp", "in_app"],
       notification_status: ["pending", "sent", "failed", "cancelled"],
+      organization_status: ["draft", "active", "inactive", "archived"],
       package_status: ["active", "completed", "expired", "cancelled"],
       patient_gender: ["female", "male", "other", "prefer_not_to_say"],
       payment_mode: [
@@ -1650,6 +1604,7 @@ export const Constants = {
       ],
       recipient_type: ["user", "patient"],
       subscription_status: [
+        "inactive",
         "trialing",
         "active",
         "past_due",
@@ -1658,4 +1613,5 @@ export const Constants = {
       ],
     },
   },
-} as const;
+} as const
+

@@ -16,7 +16,16 @@ export async function findSubscriptionPlanByName(
   supabase: SupabaseClient<Database>,
   name: string
 ): Promise<SubscriptionPlan | null> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("subscription_plans")
+    .select("*")
+    .eq("plan_name", name)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 

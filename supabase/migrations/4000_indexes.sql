@@ -8,9 +8,6 @@ create index organizations_created_by_idx on public.organizations(created_by);
 create index users_organization_id_idx on public.users(organization_id);
 create index users_role_id_idx on public.users(role_id);
 
-create index organization_users_organization_id_idx on public.organization_users(organization_id);
-create index organization_users_user_id_idx on public.organization_users(user_id);
-
 create index clinics_organization_id_idx on public.clinics(organization_id);
 
 create index user_clinics_organization_id_idx on public.user_clinics(organization_id);

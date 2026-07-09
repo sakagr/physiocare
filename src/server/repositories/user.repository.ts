@@ -18,7 +18,16 @@ export async function findUserByEmail(
   supabase: SupabaseClient<Database>,
   email: string
 ): Promise<User | null> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 /**
@@ -32,7 +41,16 @@ export async function findRoleByName(
   supabase: SupabaseClient<Database>,
   name: AppRole
 ): Promise<Role | null> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("roles")
+    .select("*")
+    .eq("name", name)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 /**
@@ -46,7 +64,16 @@ export async function insertUser(
   supabase: SupabaseClient<Database>,
   user: InsertUser
 ): Promise<User> {
-  throw new Error("Not implemented");
+  const { data, error } = await supabase
+    .from("users")
+    .insert(user)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 

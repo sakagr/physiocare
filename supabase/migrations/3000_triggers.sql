@@ -18,10 +18,6 @@ create trigger set_users_updated_at
 before update on public.users
 for each row execute function public.set_updated_at();
 
-create trigger set_organization_users_updated_at
-before update on public.organization_users
-for each row execute function public.set_updated_at();
-
 create trigger set_clinics_updated_at
 before update on public.clinics
 for each row execute function public.set_updated_at();

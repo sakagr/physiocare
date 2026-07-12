@@ -47,7 +47,7 @@ AI agents should follow these conventions unless explicitly instructed otherwise
 
 ## Repositories
 
-Repositories are responsible only for data access.
+Repositories are responsible only for persistence and data access. They should remain deterministic and reusable.
 
 Repositories may:
 
@@ -56,6 +56,7 @@ Repositories may:
 - Update rows.
 - Delete rows.
 - Execute simple queries.
+- Return domain models.
 
 Repositories must not:
 
@@ -64,6 +65,28 @@ Repositories must not:
 - Call external APIs.
 - Make authorization decisions.
 - Perform orchestration.
+
+Repository implementation style:
+
+```ts
+const { data, error } = await supabase
+    ...
+
+if (error) {
+    throw error;
+}
+
+return data;
+```
+
+Conventions:
+
+- Destructure `data` and `error` directly.
+- Check `error` immediately after the query.
+- Throw unexpected database errors.
+- Return `data` as the final statement.
+- Use `maybeSingle()` for lookup methods.
+- Use `single()` for insert/update/delete methods expected to affect exactly one row.
 
 Repository naming convention:
 
@@ -88,15 +111,30 @@ deleteInvoice()
 
 ## Services
 
-Services implement business capabilities. Complex business workflows are coordinated by dedicated orchestration services.
+The application follows a layered service architecture consisting of **Domain Services** and **Application (Orchestration) Services**.
 
-Services may:
+### Domain Services
 
-- Coordinate repositories.
-- Call other services.
-- Call external systems through dedicated service abstractions.
-- Implement business rules.
-- Perform orchestration.
+Domain services implement business capabilities within a single bounded context. They encapsulate business rules, perform read/query operations, coordinate with repositories, and return domain entities or DTOs. They should remain independent of other domain services whenever possible and must not orchestrate workflows across multiple domains.
+
+Examples:
+
+- `user.service.ts`
+- `clinic.service.ts`
+- `user-clinic.service.ts`
+
+### Application (Orchestration) Services
+
+Application services coordinate multi-step workflows spanning multiple domains. They call participating domain services, manage transaction boundaries, execute compensation logic for external systems, and enforce workflow consistency. They must not contain persistence logic that belongs in repositories.
+
+Services may call external systems only through dedicated service abstractions. Complex workflows should be orchestrated by a dedicated application service. For example, `organization.service.ts` orchestrates organization onboarding by coordinating the Auth Service, User Service, and repositories.
+
+Service boundaries:
+
+- `organization.service.ts` orchestrates organization-related workflows.
+- `authorization.service.ts` determines whether the caller is authorized to perform an operation.
+- `user.service.ts` encapsulates user-related business rules and profile management.
+- `auth.service.ts` encapsulates all Supabase Auth interactions.
 
 Service naming convention:
 
@@ -124,6 +162,10 @@ calculateCommission()
 
 Validators are responsible only for validating and parsing input.
 
+Validation is performed before business logic. The API layer performs transport parsing; validators remain transport-agnostic, validate application data only, and must not compensate for HTTP, URL, framework, or transport-specific behavior.
+
+For example, normalize `searchParams.get("search") ?? undefined` inside the route handler, not inside a validator.
+
 Validator naming convention:
 
 - validate...
@@ -135,32 +177,6 @@ Examples:
 validateCreateOrganizationInput()
 parseAppointmentRequest()
 ```
-
----
-
-# Authentication
-
-Supabase Auth is treated as an external authentication provider.
-
-It is not treated as another database table.
-
-The Auth Service is the abstraction over Supabase Auth. It owns all authentication identity operations (including invitations, as they belong to the authentication subsystem rather than the business domain).
-
-Authentication-related operations belong in:
-
-```
-src/server/services/auth.service.ts
-```
-
-The Auth Service is the only layer that should interact directly with Supabase Auth, including:
-
-- inviteUser()
-- resendInvitation()
-- deleteUser()
-- disableUser()
-- enableUser()
-- updateUser()
-- resetPassword()
 
 ---
 
@@ -453,50 +469,6 @@ Do not reintroduce `organization_users` unless the business requirements explici
 
 ---
 
-## User-Clinic Relationship
-
-Users may belong to multiple clinics.
-
-This is modeled using the `user_clinics` table.
-
-This many-to-many relationship is intentional and should be preserved.
-
-```text
-Users
-    ↕
-User Clinics
-    ↕
-Clinics
-```
-
----
-
-## Authorization
-
-`users.role_id` is the single source of truth for application authorization.
-
-Role information must not be duplicated in additional tables.
-
-Authorization decisions should be based on `users.role_id`.
-
----
-
-## Authentication
-
-Supabase Auth manages authentication.
-
-The `public.users` table manages application user information.
-
-These represent different concerns and should remain separate.
-
-Authentication operations belong in:
-
-```
-src/server/services/auth.service.ts
-```
-
----
-
 ## Organization Bootstrap
 
 Organizations are created only by `SUPER_ADMIN`.
@@ -610,6 +582,8 @@ Platform users do not belong to an organization.
 
 Organization users belong to exactly one organization.
 
+Platform users are provisioned directly by the platform using Supabase Auth. Every organization user has a globally unique username, an email address for communication and account recovery, an optional phone number, and exactly one organization.
+
 ---
 
 ## Roles
@@ -677,6 +651,9 @@ Rules:
 - Immutable after creation.
 - Never reused.
 - Created only by administrators.
+- Stored in lowercase.
+- Normalized by the validation layer before persistence.
+- Used for authentication instead of email.
 
 ### Email
 
@@ -705,6 +682,24 @@ They are not used for authentication and are not required to be unique.
 ---
 
 ## Authentication
+
+Supabase Auth is an external authentication provider, not another database table. The application owns user identity and business lifecycle; Supabase Auth is responsible only for authentication. The `public.users` table manages application user information, and the two concerns must remain separate.
+
+The Auth Service is the abstraction over Supabase Auth. It owns all authentication identity operations, including invitations, which belong to the authentication subsystem rather than the business domain. Authentication-related operations belong in:
+
+```
+src/server/services/auth.service.ts
+```
+
+The Auth Service is the only layer that may interact directly with Supabase Auth, including:
+
+- inviteUser()
+- resendInvitation()
+- deleteUser()
+- disableUser()
+- enableUser()
+- updateUser()
+- resetPassword()
 
 Passwords are managed exclusively by Supabase Auth.
 
@@ -752,14 +747,22 @@ All other organization users are created by an `ORG_OWNER` or an authorized `ORG
 
 The onboarding workflow is:
 
-1. Administrator creates the user.
-2. Backend creates the Supabase Auth user using `auth.admin.createUser()`.
-3. `email_confirm` is set to `true`.
-4. The application user is created.
-5. The administrator securely communicates the username and initial password to the employee.
-6. Organization users are not required to change their password on first login. Users may change their password at any time through the password management workflow.
+1. Validate the request and authorization.
+2. Validate username and email availability.
+3. Generate an initial password.
+4. Administrator creates the user.
+5. Backend creates the Supabase Auth user using `auth.admin.createUser()` with `email_confirm` set to `true`.
+6. Create the application user profile.
+7. Roll back the Auth user if profile creation fails.
+8. The administrator securely communicates the username and initial password to the employee.
+9. Organization users are not required to change their password on first login. Users may change their password at any time through the password management workflow.
 
 Organization users are **not** onboarded using the Supabase invitation flow.
+
+Current authorization for organization user onboarding is:
+
+- `ORG_OWNER`
+- `ORG_ADMIN`
 
 ---
 
@@ -778,6 +781,8 @@ Deleted
 ```
 
 Platform users are never off-boarded because they do not belong to an organization.
+
+Platform users are onboarded by the platform and authenticated using Supabase Auth. Currently, only `SUPER_ADMIN` users are created during organization bootstrap.
 
 ---
 
@@ -827,6 +832,118 @@ Authenticate through Supabase Auth
 
 ---
 
+## Password Policy
+
+### System-Generated Initial Password
+
+This password is generated by the application when creating a new user account.
+
+Requirements:
+
+- Exactly **16 characters** long.
+- Cryptographically secure random generation.
+- Must contain at least:
+  - One uppercase letter (`A-Z`)
+  - One lowercase letter (`a-z`)
+  - One numeric digit (`0-9`)
+  - One special character.
+- Must never be stored in the application database.
+- Must never be logged or written to audit logs.
+- Must only be returned once in the API response immediately after successful user creation.
+- If lost, it must be reset through the password reset workflow.
+
+### User-Defined Password
+
+Requirements:
+
+- Minimum **8 characters**.
+- Must contain at least:
+  - One uppercase letter (`A-Z`)
+  - One lowercase letter (`a-z`)
+  - One numeric digit (`0-9`)
+  - One special character.
+- Password expiry is not enforced.
+- Users are encouraged, but not required, to change their password periodically.
+
+---
+
+## Role Hierarchy
+
+Current organization role hierarchy:
+
+```
+ORG_OWNER
+    │
+    ├── ORG_OWNER
+    ├── ORG_ADMIN
+    ├── ORG_PHYSIOTHERAPIST
+    ├── ORG_RECEPTIONIST
+    └── ORG_ACCOUNTANT
+
+ORG_ADMIN
+    │
+    ├── ORG_PHYSIOTHERAPIST
+    ├── ORG_RECEPTIONIST
+    └── ORG_ACCOUNTANT
+```
+
+Current platform roles do not participate in organization user management.
+
+---
+
+## User–Clinic Relationship
+
+Users and clinics have an intentional many-to-many relationship modeled with the `user_clinics` table.
+
+```text
+Users
+    ↕
+User Clinics
+    ↕
+Clinics
+```
+
+Design principles:
+
+- A user may be assigned to zero, one, or many clinics.
+- A clinic may have zero, one, or many users.
+- Clinic assignment is independent of the user's role.
+- Every organization user belongs to exactly one organization but may operate across multiple clinics within that organization.
+
+### Clinic Assignment Lifecycle
+
+Clinic assignments are managed independently from the user lifecycle.
+
+- Creating a user does not require assigning them to a clinic.
+- Creating a clinic does not require assigning any users.
+- Clinic assignments may be created, updated, or removed at any time.
+- User-clinic assignments use soft deletion to preserve historical relationships.
+- Permanent deletion (purge) may be introduced in the future to satisfy business or regulatory requirements.
+
+### Operational Scope
+
+A user's role determines **what** they are allowed to do. Clinic assignments determine **where** they are allowed to perform those actions. These are independent concepts and should remain decoupled.
+
+---
+
+## Authorization
+
+`users.role_id` is the single source of truth for application authorization; role information must not be duplicated in additional tables.
+
+Authorization decisions are centralized in `authorization.service.ts`. API routes must never perform role comparisons or contain business authorization logic, and business services must never compare role names directly. New reusable capability methods must make authorization decisions rather than exposing role checks.
+
+Examples:
+
+- `canCreateUser()`
+- `canManageUsers()`
+- `canCreateClinic()`
+- `canManageClinic()`
+- `canAssignUserToClinic()`
+
+This capability-based abstraction allows authorization to evolve beyond the current role-based model without changing consumers. Future modules requiring clinic-based access should use a shared authorization helper, such as `getAccessibleClinicIds(userId)`, instead of implementing clinic access logic independently.
+
+---
+
 ## Development Workflow
 
 Schema changes are developed locally first.
@@ -846,6 +963,28 @@ Push to remote
 ```
 
 Do not manually edit production databases.
+
+---
+
+# Architecture Decision Records (ADR)
+
+Significant architectural decisions must be documented as Architecture Decision Records (ADRs).
+
+Create or update an ADR whenever a decision:
+
+- Introduces a new architectural pattern.
+- Changes an existing architectural pattern.
+- Changes service boundaries.
+- Changes persistence strategy.
+- Changes authorization strategy.
+- Introduces new cross-cutting infrastructure.
+- Changes transaction or consistency strategy.
+
+Minor implementation details, bug fixes, refactoring, naming changes, or isolated optimizations do not require ADRs.
+
+Accepted ADRs are immutable. If an architectural decision changes, create a new ADR that supersedes the previous one rather than modifying historical ADRs.
+
+The implementation plan should reference any new or updated ADRs whenever architectural decisions are introduced.
 
 ---
 
@@ -931,272 +1070,163 @@ Do not inspect PostgREST error codes when `maybeSingle()` can naturally represen
 
 ---
 
-# Identity & Authorization
+# Query / Command Separation
 
-This section defines the core identity, authentication, authorization, and user lifecycle architecture for PhysioCare.
+The project follows a CQRS-inspired separation of responsibilities.
 
-## User Identity
+## Query Operations
 
-### Platform Users
+Read-only operations should:
 
-Platform users are responsible for administering the PhysioCare SaaS platform and are not associated with any organization.
-
-Current platform roles:
-
-- SUPER_ADMIN
-- PLATFORM_SUPPORT
-- PLATFORM_SALES
-- PLATFORM_BILLING
-
-Platform users are created directly by the platform using Supabase Auth.
-
----
-
-### Organization Users
-
-Organization users belong to exactly one organization.
-
-Current organization roles:
-
-- ORG_OWNER
-- ORG_ADMIN
-- ORG_PHYSIOTHERAPIST
-- ORG_RECEPTIONIST
-- ORG_ACCOUNTANT
-
-Every organization user has:
-
-- A globally unique username.
-- An email address used for communication and account recovery.
-- An optional phone number.
-- Exactly one organization.
-
-The username is the primary login identifier.
-
----
-
-## User Lifecycle
-
-### Platform Users
-
-Platform users are onboarded by the platform and authenticated using Supabase Auth.
-
-Currently, only `SUPER_ADMIN` users are created during organization bootstrap.
-
----
-
-### Organization Users
-
-Organization users are created by existing authorized organization users.
-
-Current authorization:
-
-- ORG_OWNER
-- ORG_ADMIN
-
-The onboarding workflow:
-
-1. Validate request.
-2. Validate authorization.
-3. Validate username availability.
-4. Validate email availability.
-5. Generate an initial password.
-6. Create the Supabase Auth user.
-7. Create the application user profile.
-8. Roll back the Auth user if profile creation fails.
-
----
-
-## Username Policy
-
-Usernames are the primary login identifier.
-
-Requirements:
-
-- Globally unique.
-- Immutable after creation.
-- Stored in lowercase.
-- Normalized by the validation layer before persistence.
-- Used for authentication instead of email.
-
-Email addresses are used for communication and password recovery.
-
----
-
-## Password Policy
-
-### System-Generated Initial Password
-
-This password is generated by the application when creating a new user account.
-
-Requirements:
-
-- Exactly **16 characters** long.
-- Cryptographically secure random generation.
-- Must contain at least:
-  - One uppercase letter (`A-Z`)
-  - One lowercase letter (`a-z`)
-  - One numeric digit (`0-9`)
-  - One special character.
-- Must never be stored in the application database.
-- Must never be logged or written to audit logs.
-- Must only be returned once in the API response immediately after successful user creation.
-- If lost, it must be reset through the password reset workflow.
-
-### User-Defined Password
-
-Requirements:
-
-- Minimum **8 characters**.
-- Must contain at least:
-  - One uppercase letter (`A-Z`)
-  - One lowercase letter (`a-z`)
-  - One numeric digit (`0-9`)
-  - One special character.
-- Password expiry is not enforced.
-- Users are encouraged, but not required, to change their password periodically.
-
----
-
-## Role Hierarchy
-
-Current organization role hierarchy:
-
-```
-ORG_OWNER
-    │
-    ├── ORG_OWNER
-    ├── ORG_ADMIN
-    ├── ORG_PHYSIOTHERAPIST
-    ├── ORG_RECEPTIONIST
-    └── ORG_ACCOUNTANT
-
-ORG_ADMIN
-    │
-    ├── ORG_PHYSIOTHERAPIST
-    ├── ORG_RECEPTIONIST
-    └── ORG_ACCOUNTANT
-```
-
-Current platform roles do not participate in organization user management.
-
-Future authorization may evolve beyond the current role-based model while preserving the existing capability-oriented service interfaces.
-
----
-
-## Clinic Access Model
-
-### User–Clinic Relationship
-
-Users and clinics have a many-to-many relationship.
-
-Design principles:
-
-- A user may be assigned to zero, one, or many clinics.
-- A clinic may have zero, one, or many users.
-- Clinic assignment is independent of the user's role.
-- Every organization user belongs to exactly one organization but may operate across multiple clinics within that organization.
-
-### Clinic Assignment Lifecycle
-
-Clinic assignments are managed independently from the user lifecycle.
-
-- Creating a user does not require assigning them to a clinic.
-- Creating a clinic does not require assigning any users.
-- Clinic assignments may be created, updated, or removed at any time.
-- User-clinic assignments use soft deletion to preserve historical relationships.
-- Permanent deletion (purge) may be introduced in the future to satisfy business or regulatory requirements.
-
-### Operational Scope
-
-A user's role determines **what** they are allowed to do.
-
-Clinic assignments determine **where** they are allowed to perform those actions.
-
-These are independent concepts and should remain decoupled.
-
----
-
-## Authorization Architecture
-
-Authorization decisions must be encapsulated within `authorization.service.ts`.
-
-API routes must not contain business authorization logic.
-
-Service responsibilities:
-
-- `organization.service.ts`
-  - Orchestrates organization-related workflows.
-- `authorization.service.ts`
-  - Determines whether the caller is authorized to perform an operation.
-- `user.service.ts`
-  - Encapsulates user-related business rules and profile management.
-- `auth.service.ts`
-  - Encapsulates all Supabase Auth interactions.
-
-This separation of responsibilities must be maintained throughout the project.
-
-Authorization methods should represent business capabilities rather than role checks.
+- Live in the appropriate domain service.
+- Not modify application state.
+- Not trigger side effects.
+- Be callable directly from API routes.
 
 Examples:
 
-- `canCreateUser()`
-- `canManageUsers()`
-- `canCreateClinic()`
-- `canManageClinic()`
-- `canAssignUserToClinic()`
-
-This abstraction allows the internal authorization implementation to evolve without changing consumers.
-
-Future modules requiring clinic-based access should use a shared authorization helper (for example, `getAccessibleClinicIds(userId)`) instead of implementing clinic access logic independently.
+- List endpoints
+- Detail endpoints
+- Search
+- Filtering
+- Pagination
 
 ---
 
-# Repository Implementation Style
+## Command Operations
 
-Repository methods should follow a consistent implementation pattern.
+State-changing operations should:
 
-Example:
+- Execute through the application (orchestration) service.
+- Coordinate all participating domain services.
+- Execute validation.
+- Manage consistency.
+- Execute compensation logic when required.
 
-```ts
-const { data, error } = await supabase
-    ...
-    
-if (error) {
-    throw error;
-}
+Examples:
 
-return data;
-```
-
-Conventions:
-
-- Destructure `data` and `error` directly.
-- Check `error` immediately after the query.
-- Throw unexpected database errors.
-- Return `data` as the final statement.
-- Use `maybeSingle()` for lookup methods.
-- Use `single()` for insert/update/delete methods expected to affect exactly one row.
+- Organization bootstrap
+- User onboarding
+- User activation
+- User deactivation
+- User offboarding
+- Role changes
+- Clinic creation
+- User-clinic assignments
 
 ---
-# Service Orchestration
 
-Complex business workflows should be orchestrated by a dedicated service.
+# External System Consistency
 
-Individual services should implement a single business capability.
+PhysioCare integrates with external systems (for example Supabase Auth) that cannot participate in PostgreSQL transactions.
 
-Example:
+Distributed transactions are **not** used.
 
-Organization onboarding is orchestrated by:
+Instead, workflows must use **Compensating Actions**.
 
+Guidelines:
+
+- Perform every possible validation before invoking external systems.
+- Execute external operations only after all validations succeed.
+- If a later database operation fails, execute the inverse external operation whenever possible.
+- Surface failures only after attempting compensation.
+
+Examples:
+
+- User Activation
+- User Deactivation
+- Organization Bootstrap
+
+If compensation cannot be performed safely, the implementation must document why and ensure failures leave the system in the safest possible state.
+
+---
+
+# Soft Delete Strategy
+
+The application uses soft deletion as the default lifecycle strategy.
+
+Rules:
+
+- Records should be soft deleted using `deleted_at`.
+- Soft deleted records remain part of system history.
+- Reactivation should reuse existing records whenever possible.
+- Hard deletes should be exceptional administrative operations.
+
+---
+
+# Partial Unique Index Convention
+
+For entities supporting soft deletion, uniqueness should be enforced only for active records.
+
+Avoid:
+
+```sql
+UNIQUE (...)
 ```
-organization.service.ts
+
+Prefer:
+
+```sql
+CREATE UNIQUE INDEX ...
+WHERE deleted_at IS NULL;
 ```
 
-which coordinates:
+This convention applies to future entities supporting soft deletion.
 
-- Auth Service
-- User Service
-- Repositories
+---
 
-Individual services should not orchestrate other business workflows.
+# Test-Driven Development (TDD)
+
+## Development Workflow
+
+All new features and bug fixes **must follow a Test-Driven Development (TDD) workflow** unless explicitly instructed otherwise.
+
+The expected development sequence is:
+
+1. Define or update the implementation plan.
+2. Identify the required test scenarios.
+3. Implement automated tests.
+4. Verify that the tests fail for the expected reason.
+5. Implement production code.
+6. Refactor while keeping tests passing.
+7. Execute the complete verification suite.
+
+Production code is **not considered complete** until the corresponding automated tests exist and pass.
+
+Tests should be developed and committed alongside the production implementation as part of the same change.
+
+A feature or bug fix is not considered complete if the implementation exists without its corresponding automated tests.
+
+Every bug discovered in production should first be reproduced with an automated failing test before implementing the fix.
+
+---
+
+## Testing Requirements
+
+Every feature should include tests appropriate to its scope.
+
+Depending on the implementation, this includes:
+
+- Unit tests
+- Integration tests
+- API endpoint tests
+- Validation tests
+
+---
+
+# Phase Completion Checklist
+
+Before a development phase is considered complete:
+
+- Implementation follows the approved architecture.
+- Database migrations are created and reviewed.
+- Validation schemas are implemented.
+- Repository layer is complete.
+- Service layer is complete.
+- Authorization is implemented.
+- RLS policies are implemented and verified where applicable.
+- TypeScript compilation passes (`npx tsc --noEmit`).
+- Production build passes (`npm run build`).
+- Integration tests pass.
+- API tests pass where applicable.
+- Documentation (`AGENTS.md` and ADRs) is updated if new architectural decisions were introduced.

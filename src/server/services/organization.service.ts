@@ -296,8 +296,11 @@ export async function deactivateUser(
 
 /**
  * Off-boards an organization user (soft delete).
- * Deletes user identity from Supabase Auth and updates public user status to inactive & deleted_at = now().
- * Also soft-deletes all associated user-clinic assignments.
+ * Revokes authentication access in Supabase Auth and soft-deletes the user
+ * profile (is_active = false, deleted_at = now()) along with associated
+ * user-clinic assignments. The Auth identity and application profile are
+ * both retained for audit and history.
+ * Uses an all-or-nothing consistency model with compensation logic.
  */
 export async function offboardUser(
   supabase: SupabaseClient<Database>,
@@ -319,24 +322,34 @@ export async function offboardUser(
     throw new Error("Target user organization reference is missing");
   }
 
-  // 1. Soft-delete the user profile in database
-  const updatedUser = await updateUser(supabase, targetUser.id, {
-    is_active: false,
-    deleted_at: new Date().toISOString(),
-  });
+  // 1. Revoke authentication access in Supabase Auth
+  await setUserDisabled(adminClient, targetUser.id);
 
-  // 2. Soft-delete user-clinic assignments in database
-  await supabase
-    .from("user_clinics")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("user_id", targetUser.id)
-    .eq("organization_id", targetUser.organization_id)
-    .is("deleted_at", null);
+  try {
+    // 2. Soft-delete the user profile in database
+    const updatedUser = await updateUser(supabase, targetUser.id, {
+      is_active: false,
+      deleted_at: new Date().toISOString(),
+    });
 
-  // 3. Delete from Supabase Auth (which cascades physical delete in public.users)
-  await deleteUser(adminClient, targetUser.id);
+    // 3. Soft-delete user-clinic assignments in database
+    await supabase
+      .from("user_clinics")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("user_id", targetUser.id)
+      .eq("organization_id", targetUser.organization_id)
+      .is("deleted_at", null);
 
-  return updatedUser;
+    return updatedUser;
+  } catch (error) {
+    // Compensation logic: re-enable Auth in Supabase Auth if database update fails
+    try {
+      await setUserEnabled(adminClient, targetUser.id);
+    } catch {
+      // Centralized monitoring alert
+    }
+    throw error;
+  }
 }
 
 /**

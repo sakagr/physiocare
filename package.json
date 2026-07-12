@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "node supabase/scripts/seed.js"
+    "db:seed": "node supabase/scripts/seed.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "RUN_SUPABASE_INTEGRATION=1 vitest run tests/integration",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -28,10 +32,15 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "supabase": "^2.100.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^2.1.9",
+    "ws": "^8.21.0"
   }
 }

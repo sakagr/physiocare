@@ -1143,18 +1143,21 @@ export type Database = {
       roles: {
         Row: {
           created_at: string
+          display_name: string
           id: string
           name: Database["public"]["Enums"]["app_role"]
           updated_at: string
         }
         Insert: {
           created_at?: string
+          display_name: string
           id?: string
           name: Database["public"]["Enums"]["app_role"]
           updated_at?: string
         }
         Update: {
           created_at?: string
+          display_name?: string
           id?: string
           name?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -1336,6 +1339,7 @@ export type Database = {
           phone: string | null
           role_id: string
           updated_at: string
+          username: string
         }
         Insert: {
           commission_type?: Database["public"]["Enums"]["commission_type"]
@@ -1350,6 +1354,7 @@ export type Database = {
           phone?: string | null
           role_id: string
           updated_at?: string
+          username: string
         }
         Update: {
           commission_type?: Database["public"]["Enums"]["commission_type"]
@@ -1364,6 +1369,7 @@ export type Database = {
           phone?: string | null
           role_id?: string
           updated_at?: string
+          username?: string
         }
         Relationships: [
           {
@@ -1392,7 +1398,16 @@ export type Database = {
       is_super_admin: { Args: never; Returns: boolean }
     }
     Enums: {
-      app_role: "SUPER_ADMIN" | "ORG_ADMIN" | "RECEPTIONIST" | "PHYSIOTHERAPIST"
+      app_role:
+        | "SUPER_ADMIN"
+        | "PLATFORM_SUPPORT"
+        | "PLATFORM_SALES"
+        | "PLATFORM_BILLING"
+        | "ORG_OWNER"
+        | "ORG_ADMIN"
+        | "ORG_PHYSIOTHERAPIST"
+        | "ORG_RECEPTIONIST"
+        | "ORG_ACCOUNTANT"
       appointment_status:
         | "scheduled"
         | "confirmed"
@@ -1564,7 +1579,17 @@ export const Constants = {
   },
   public: {
     Enums: {
-      app_role: ["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "PHYSIOTHERAPIST"],
+      app_role: [
+        "SUPER_ADMIN",
+        "PLATFORM_SUPPORT",
+        "PLATFORM_SALES",
+        "PLATFORM_BILLING",
+        "ORG_OWNER",
+        "ORG_ADMIN",
+        "ORG_PHYSIOTHERAPIST",
+        "ORG_RECEPTIONIST",
+        "ORG_ACCOUNTANT",
+      ],
       appointment_status: [
         "scheduled",
         "confirmed",

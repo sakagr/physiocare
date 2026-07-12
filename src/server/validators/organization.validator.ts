@@ -16,7 +16,16 @@ export const createOrganizationSchema = z.object({
     .trim(),
   adminEmail: z
     .string()
-    .email({ message: "Please enter a valid email address." })
+    .toLowerCase()
+    .trim()
+    .pipe(z.email({ message: "Please enter a valid email address." })),
+  adminUsername: z
+    .string()
+    .min(3, { message: "Username must be at least 3 characters long." })
+    .max(50, { message: "Username cannot exceed 50 characters." })
+    .regex(/^[a-zA-Z0-9._-]+$/, {
+      message: "Username can only contain alphanumeric characters, dots, underscores, and hyphens.",
+    })
     .toLowerCase()
     .trim(),
 });

@@ -516,7 +516,7 @@ Invite User (Creates Supabase Auth User)
     ↓
 Create Organization (status = draft)
     ↓
-Create Application User
+Create ORG_OWNER
     ↓
 Update Organization.created_by
     ↓
@@ -570,6 +570,261 @@ The following rules apply:
 - `subscription_status` defaults to `inactive`.
 - Trial or paid subscriptions begin only when explicitly activated by the business workflow.
 - Organization onboarding must not contain subscription or billing logic.
+
+---
+
+# User Identity & Authentication
+
+The application separates **user identity** from **authentication**.
+
+The application owns the user identity and business lifecycle.
+
+Supabase Auth is responsible only for authentication.
+
+---
+
+## User Model
+
+The application uses a single `users` table for all users.
+
+There are no separate platform user and organization user tables.
+
+Users are differentiated by their application role, which determines whether they are a platform user or an organization user.
+
+Platform roles include:
+
+- `SUPER_ADMIN`
+- `PLATFORM_SUPPORT`
+- `PLATFORM_SALES`
+- `PLATFORM_BILLING`
+
+Organization roles include:
+
+- `ORG_OWNER`
+- `ORG_ADMIN`
+- `ORG_PHYSIOTHERAPIST`
+- `ORG_RECEPTIONIST`
+- `ORG_ACCOUNTANT`
+
+Platform users do not belong to an organization.
+
+Organization users belong to exactly one organization.
+
+---
+
+## Roles
+
+Application roles contain two names.
+
+### System Name
+
+The system name is the immutable identifier used by the application for authorization.
+
+Examples:
+
+```text
+SUPER_ADMIN
+PLATFORM_SUPPORT
+ORG_OWNER
+ORG_ADMIN
+ORG_PHYSIOTHERAPIST
+```
+
+System names:
+
+- Are seeded.
+- Must never be renamed.
+- Are used by the application for authorization.
+
+### Display Name
+
+Each role also contains a display name used by the UI.
+
+Display names:
+
+- Are required.
+- May be changed without affecting application behavior.
+
+Examples:
+
+| System Name | Display Name |
+| ------------ | ------------ |
+| SUPER_ADMIN | Super Admin |
+| ORG_OWNER | Owner |
+| ORG_ADMIN | Administrator |
+| ORG_PHYSIOTHERAPIST | Physiotherapist |
+
+---
+
+## User Identity
+
+Every user has:
+
+- Application User ID
+- Username
+- Email
+- Phone Number
+- Application Role
+- Organization (nullable for platform users)
+
+### Username
+
+Username is the primary login identifier.
+
+Rules:
+
+- Globally unique.
+- Immutable after creation.
+- Never reused.
+- Created only by administrators.
+
+### Email
+
+Email is used for communication.
+
+It is **not** used as the login identifier.
+
+Email is used for:
+
+- Password recovery.
+- Notifications.
+- User communication.
+
+Rules:
+
+- Required.
+- An email address may belong to only one active application user.
+- An email address may be reused after the previous user has been off-boarded.
+
+### Phone Number
+
+Phone numbers are used for communication only.
+
+They are not used for authentication and are not required to be unique.
+
+---
+
+## Authentication
+
+Passwords are managed exclusively by Supabase Auth.
+
+The application never stores user passwords.
+
+Users authenticate using:
+
+```text
+Username
+Password
+```
+
+The application resolves the username to the corresponding authentication identity before authenticating through Supabase Auth.
+
+Supabase Auth email addresses are considered an implementation detail and are never used as the application's login identifier.
+
+---
+
+## User Onboarding
+
+
+### SUPER_ADMIN
+
+Platform users are provisioned by the platform.
+
+`SUPER_ADMIN` users are onboarded using the Supabase invitation flow (`inviteUserByEmail()`).
+
+The user sets their own password during onboarding.
+
+---
+
+### ORG_OWNER
+
+The initial organization owner is created during the Organization Bootstrap workflow.
+
+`ORG_OWNER` users are onboarded using the Supabase invitation flow (`inviteUserByEmail()`).
+
+The owner sets their own password during onboarding.
+
+---
+
+### Organization Users
+
+All other organization users are created by an `ORG_OWNER` or an authorized `ORG_ADMIN`.
+
+The onboarding workflow is:
+
+1. Administrator creates the user.
+2. Backend creates the Supabase Auth user using `auth.admin.createUser()`.
+3. `email_confirm` is set to `true`.
+4. The application user is created.
+5. The administrator securely communicates the username and initial password to the employee.
+6. The employee is required to change their password on first login.
+7. The application must enforce a password change before allowing access to protected functionality.
+
+Organization users are **not** onboarded using the Supabase invitation flow.
+
+---
+
+## User Lifecycle
+
+### Platform Users
+
+```text
+Create
+    ↓
+Active
+    ↓
+Deactivated
+    ↓
+Deleted
+```
+
+Platform users are never off-boarded because they do not belong to an organization.
+
+---
+
+### Organization Users
+
+```text
+Create
+    ↓
+Active
+    ↓
+Deactivated
+    ↓
+Off-boarded
+```
+
+### Deactivated
+
+A deactivated user:
+
+- Has `is_active = false`.
+- Cannot log in.
+- May be reactivated by an authorized administrator.
+
+### Off-boarded
+
+An off-boarded user:
+
+- Has `deleted_at` populated.
+- Is no longer associated with the organization.
+- Is retained for historical and audit purposes.
+
+The re-onboarding behavior for off-boarded users will be defined as part of the User Invitation and Off-boarding workflow.
+
+---
+
+## Login Flow
+
+```
+Username
+    ↓
+Resolve Application User
+    ↓
+Resolve Authentication Identity
+    ↓
+Authenticate through Supabase Auth
+```
 
 ---
 
@@ -674,6 +929,180 @@ if (error) {
 ```
 
 Do not inspect PostgREST error codes when `maybeSingle()` can naturally represent the "not found" case.
+
+---
+
+# Identity & Authorization
+
+This section defines the core identity, authentication, authorization, and user lifecycle architecture for PhysioCare.
+
+## User Identity
+
+### Platform Users
+
+Platform users are responsible for administering the PhysioCare SaaS platform and are not associated with any organization.
+
+Current platform roles:
+
+- SUPER_ADMIN
+- PLATFORM_SUPPORT
+- PLATFORM_SALES
+- PLATFORM_BILLING
+
+Platform users are created directly by the platform using Supabase Auth.
+
+---
+
+### Organization Users
+
+Organization users belong to exactly one organization.
+
+Current organization roles:
+
+- ORG_OWNER
+- ORG_ADMIN
+- ORG_PHYSIOTHERAPIST
+- ORG_RECEPTIONIST
+- ORG_ACCOUNTANT
+
+Every organization user has:
+
+- A globally unique username.
+- An email address used for communication and account recovery.
+- An optional phone number.
+- Exactly one organization.
+
+The username is the primary login identifier.
+
+---
+
+## User Lifecycle
+
+### Platform Users
+
+Platform users are onboarded by the platform and authenticated using Supabase Auth.
+
+Currently, only `SUPER_ADMIN` users are created during organization bootstrap.
+
+---
+
+### Organization Users
+
+Organization users are created by existing authorized organization users.
+
+Current authorization:
+
+- ORG_OWNER
+- ORG_ADMIN
+
+The onboarding workflow:
+
+1. Validate request.
+2. Validate authorization.
+3. Validate username availability.
+4. Validate email availability.
+5. Generate an initial password.
+6. Create the Supabase Auth user.
+7. Create the application user profile.
+8. Roll back the Auth user if profile creation fails.
+
+---
+
+## Username Policy
+
+Usernames are the primary login identifier.
+
+Requirements:
+
+- Globally unique.
+- Immutable after creation.
+- Stored in lowercase.
+- Normalized by the validation layer before persistence.
+- Used for authentication instead of email.
+
+Email addresses are used for communication and password recovery.
+
+---
+
+## Password Policy
+
+### System-Generated Initial Password
+
+This password is generated by the application when creating a new user account.
+
+Requirements:
+
+- Exactly **16 characters** long.
+- Cryptographically secure random generation.
+- Must contain at least:
+  - One uppercase letter (`A-Z`)
+  - One lowercase letter (`a-z`)
+  - One numeric digit (`0-9`)
+  - One special character.
+- Must never be stored in the application database.
+- Must never be logged or written to audit logs.
+- Must only be returned once in the API response immediately after successful user creation.
+- If lost, it must be reset through the password reset workflow.
+
+### User-Defined Password
+
+Requirements:
+
+- Minimum **8 characters**.
+- Must contain at least:
+  - One uppercase letter (`A-Z`)
+  - One lowercase letter (`a-z`)
+  - One numeric digit (`0-9`)
+  - One special character.
+- Password expiry is not enforced.
+- Users are encouraged, but not required, to change their password periodically.
+
+---
+
+## Role Hierarchy
+
+Current organization role hierarchy:
+
+```
+ORG_OWNER
+    │
+    ├── ORG_OWNER
+    ├── ORG_ADMIN
+    ├── ORG_PHYSIOTHERAPIST
+    ├── ORG_RECEPTIONIST
+    └── ORG_ACCOUNTANT
+
+ORG_ADMIN
+    │
+    ├── ORG_PHYSIOTHERAPIST
+    ├── ORG_RECEPTIONIST
+    └── ORG_ACCOUNTANT
+```
+
+Current platform roles do not participate in organization user management.
+
+Future authorization should evolve toward a permission-based model while preserving the current service interfaces.
+
+---
+
+## Authorization Architecture
+
+Authorization decisions must be encapsulated within `authorization.service.ts`.
+
+API routes must not contain business authorization logic.
+
+Service responsibilities:
+
+- `organization.service.ts`
+  - Orchestrates organization-related workflows.
+- `authorization.service.ts`
+  - Determines whether the caller is authorized to perform an operation.
+- `user.service.ts`
+  - Encapsulates user-related business rules and profile management.
+- `auth.service.ts`
+  - Encapsulates all Supabase Auth interactions.
+
+This separation of responsibilities must be maintained throughout the project.
 
 ---
 

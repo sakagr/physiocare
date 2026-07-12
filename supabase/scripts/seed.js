@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 require('dotenv').config({path: '.env.local'});
 const { readdirSync, readFileSync } = require('fs')
 const path = require('path')

@@ -76,4 +76,74 @@ export async function insertUser(
   return data;
 }
 
+/**
+ * Finds a user profile by their ID.
+ * 
+ * @param supabase - The Supabase client.
+ * @param id - The ID of the user to find.
+ * @returns The user record if found, or null.
+ */
+export async function findUserById(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Finds a role record by its ID.
+ * 
+ * @param supabase - The Supabase client.
+ * @param id - The ID of the role to find.
+ * @returns The role record if found, or null.
+ */
+export async function findRoleById(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<Role | null> {
+  const { data, error } = await supabase
+    .from("roles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Finds a profile by username in the public users table.
+ * 
+ * @param supabase - The Supabase client.
+ * @param username - The username to check.
+ * @returns The user record if found, or null.
+ */
+export async function findUserByUsername(
+  supabase: SupabaseClient<Database>,
+  username: string
+): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+
 

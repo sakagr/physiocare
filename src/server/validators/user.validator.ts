@@ -61,3 +61,65 @@ export type CreateOrganizationUserInput = z.infer<typeof createOrganizationUserS
 export function validateCreateOrganizationUserInput(input: unknown): CreateOrganizationUserInput {
   return createOrganizationUserSchema.parse(input);
 }
+
+/**
+ * Zod validation schema for updating user profile info.
+ */
+export const updateUserProfileSchema = z.object({
+  fullName: z
+    .string()
+    .min(2, { message: "Full name must be at least 2 characters long." })
+    .max(100, { message: "Full name cannot exceed 100 characters." })
+    .trim()
+    .optional(),
+  phone: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal("")),
+});
+
+/**
+ * TypeScript type inferred from the user profile update schema.
+ */
+export type UpdateUserProfileInput = z.infer<typeof updateUserProfileSchema>;
+
+/**
+ * Validates and parses the input for updating a user profile.
+ */
+export function validateUpdateUserProfileInput(input: unknown): UpdateUserProfileInput {
+  return updateUserProfileSchema.parse(input);
+}
+
+/**
+ * Zod validation schema for updating user role.
+ */
+export const changeUserRoleSchema = z.object({
+  role: z
+    .enum([
+      "SUPER_ADMIN",
+      "PLATFORM_SUPPORT",
+      "PLATFORM_SALES",
+      "PLATFORM_BILLING",
+      "ORG_OWNER",
+      "ORG_ADMIN",
+      "ORG_PHYSIOTHERAPIST",
+      "ORG_RECEPTIONIST",
+      "ORG_ACCOUNTANT",
+    ])
+    .refine((val): val is AppRole => val.startsWith("ORG_"), {
+      message: "Only organization roles are allowed.",
+    }),
+});
+
+/**
+ * TypeScript type inferred from the user role update schema.
+ */
+export type ChangeUserRoleInput = z.infer<typeof changeUserRoleSchema>;
+
+/**
+ * Validates and parses the input for changing a user role.
+ */
+export function validateChangeUserRoleInput(input: unknown): ChangeUserRoleInput {
+  return changeUserRoleSchema.parse(input);
+}

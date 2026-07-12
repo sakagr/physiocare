@@ -6,6 +6,8 @@ import { validateCreateOrganizationUserInput } from "@/server/validators/user.va
 import { canCreateUser } from "@/server/services/authorization.service";
 import { createOrganizationUser } from "@/server/services/organization.service";
 import { AppError, ErrorCodes } from "@/server/errors";
+import { sharedListQuerySchema } from "@/server/validators/shared.validator";
+import { listOrganizationUsers } from "@/server/services/user.service";
 
 export async function POST(request: NextRequest) {
   let body;
@@ -72,6 +74,73 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("Error during user onboarding:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    // 1. Authenticate the caller
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // 2. Parse query parameters
+    const { searchParams } = new URL(request.url);
+    const rawPage = searchParams.get("page");
+    const rawLimit = searchParams.get("limit");
+    const rawSearch = searchParams.get("search");
+    const rawIsActive = searchParams.get("isActive");
+    const rawRole = searchParams.get("role");
+
+    // Validate query parameters using Zod
+    const parsedFilters = sharedListQuerySchema.parse({
+      page: rawPage === null || rawPage === "" ? undefined : rawPage,
+      limit: rawLimit === null || rawLimit === "" ? undefined : rawLimit,
+      search: rawSearch === null ? undefined : rawSearch,
+      isActive: rawIsActive === null ? undefined : rawIsActive,
+    });
+
+    const filters = {
+      ...parsedFilters,
+      role: rawRole as any,
+    };
+
+    // 3. Delegate to domain service
+    const result = await listOrganizationUsers(supabase, user.id, filters);
+
+    // 4. Return standard PagedResult
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { error: "Invalid query parameters", details: error.issues },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof AppError) {
+      if (error.code === ErrorCodes.FORBIDDEN) {
+        return NextResponse.json(
+          { error: error.message, code: error.code },
+          { status: 403 }
+        );
+      }
+    }
+
+    console.error("Error during listing organization users:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

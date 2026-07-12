@@ -1,13 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import type { User, AppRole } from "../repositories/user.repository";
+import type { User, AppRole, Role } from "../repositories/user.repository";
 import {
   findRoleByName,
   insertUser,
   findUserByUsername,
   findUserByEmail,
+  findUserById,
+  listUsers,
+  countUsers,
+  findUserWithRoleById,
 } from "../repositories/user.repository";
 import { AppError, ErrorCodes } from "../errors";
+import type { PagedResult } from "../validators/shared.validator";
+import { canManageUsers, hasRole } from "./authorization.service";
 
 export interface CreateOrganizationOwnerInput {
   authUserId: string;
@@ -108,4 +114,81 @@ export async function createOrganizationUserProfile(
   });
 
   return user;
+}
+
+/**
+ * Lists organization users with filters, search, and pagination.
+ * Scoped strictly to the caller's organization.
+ */
+export async function listOrganizationUsers(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  filters: {
+    page: number;
+    limit: number;
+    search?: string;
+    role?: AppRole;
+    isActive?: boolean;
+  }
+): Promise<PagedResult<User & { role: Role }>> {
+  // 1. Authorize general caller capability
+  const isAuthorized = await canManageUsers(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  // Get caller's organization ID
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller || !caller.organization_id) {
+    throw new Error("Caller must belong to a valid organization");
+  }
+
+  const organizationId = caller.organization_id;
+
+  // 2. Fetch data
+  const users = await listUsers(supabase, organizationId, filters);
+  const total = await countUsers(supabase, organizationId, filters);
+
+  return {
+    items: users,
+    total,
+    page: filters.page,
+    pageSize: filters.limit,
+    totalPages: Math.ceil(total / filters.limit),
+  };
+}
+
+/**
+ * Retrieves the details of a specific user.
+ * Scoped strictly to the caller's organization.
+ */
+export async function getUserDetails(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  targetUserId: string
+): Promise<User & { role: Role }> {
+  // 1. Authorize general caller capability
+  const isAuthorized = await canManageUsers(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  // 2. Resolve target user
+  const targetUser = await findUserWithRoleById(supabase, targetUserId);
+  if (!targetUser) {
+    throw new AppError("User not found", ErrorCodes.NOT_FOUND);
+  }
+
+  // 3. Scoping check: must be in same organization (unless platform super admin)
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller) {
+    throw new Error("Caller not found");
+  }
+
+  const isSuperAdmin = await hasRole(supabase, callerUserId, "SUPER_ADMIN");
+  if (!isSuperAdmin && caller.organization_id !== targetUser.organization_id) {
+    throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
+  }
+
+  return targetUser;
 }

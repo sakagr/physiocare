@@ -757,8 +757,7 @@ The onboarding workflow is:
 3. `email_confirm` is set to `true`.
 4. The application user is created.
 5. The administrator securely communicates the username and initial password to the employee.
-6. The employee is required to change their password on first login.
-7. The application must enforce a password change before allowing access to protected functionality.
+6. Organization users are not required to change their password on first login. Users may change their password at any time through the password management workflow.
 
 Organization users are **not** onboarded using the Supabase invitation flow.
 
@@ -1081,7 +1080,40 @@ ORG_ADMIN
 
 Current platform roles do not participate in organization user management.
 
-Future authorization should evolve toward a permission-based model while preserving the current service interfaces.
+Future authorization may evolve beyond the current role-based model while preserving the existing capability-oriented service interfaces.
+
+---
+
+## Clinic Access Model
+
+### User–Clinic Relationship
+
+Users and clinics have a many-to-many relationship.
+
+Design principles:
+
+- A user may be assigned to zero, one, or many clinics.
+- A clinic may have zero, one, or many users.
+- Clinic assignment is independent of the user's role.
+- Every organization user belongs to exactly one organization but may operate across multiple clinics within that organization.
+
+### Clinic Assignment Lifecycle
+
+Clinic assignments are managed independently from the user lifecycle.
+
+- Creating a user does not require assigning them to a clinic.
+- Creating a clinic does not require assigning any users.
+- Clinic assignments may be created, updated, or removed at any time.
+- User-clinic assignments use soft deletion to preserve historical relationships.
+- Permanent deletion (purge) may be introduced in the future to satisfy business or regulatory requirements.
+
+### Operational Scope
+
+A user's role determines **what** they are allowed to do.
+
+Clinic assignments determine **where** they are allowed to perform those actions.
+
+These are independent concepts and should remain decoupled.
 
 ---
 
@@ -1103,6 +1135,20 @@ Service responsibilities:
   - Encapsulates all Supabase Auth interactions.
 
 This separation of responsibilities must be maintained throughout the project.
+
+Authorization methods should represent business capabilities rather than role checks.
+
+Examples:
+
+- `canCreateUser()`
+- `canManageUsers()`
+- `canCreateClinic()`
+- `canManageClinic()`
+- `canAssignUserToClinic()`
+
+This abstraction allows the internal authorization implementation to evolve without changing consumers.
+
+Future modules requiring clinic-based access should use a shared authorization helper (for example, `getAccessibleClinicIds(userId)`) instead of implementing clinic access logic independently.
 
 ---
 

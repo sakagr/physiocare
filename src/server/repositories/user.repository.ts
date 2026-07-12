@@ -145,5 +145,146 @@ export async function findUserByUsername(
   return data;
 }
 
+/**
+ * Updates a user profile in the database.
+ * 
+ * @param supabase - The Supabase client.
+ * @param userId - The ID of the user to update.
+ * @param payload - The update payload.
+ * @returns The updated user record.
+ */
+export async function updateUser(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  payload: UpdateUser
+): Promise<User> {
+  const { data, error } = await supabase
+    .from("users")
+    .update(payload)
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Finds a user profile by their ID, returning it with the associated role details.
+ * 
+ * @param supabase - The Supabase client.
+ * @param userId - The ID of the user.
+ * @returns The user record with role relation, or null.
+ */
+export async function findUserWithRoleById(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<(User & { role: Role }) | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*, role:roles(*)")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data as any;
+}
+
+/**
+ * Fetches a paginated, filtered list of non-deleted users in the organization.
+ * Performs search matching against full_name, username, email, and phone.
+ */
+export async function listUsers(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  filters: {
+    page: number;
+    limit: number;
+    search?: string;
+    role?: AppRole;
+    isActive?: boolean;
+  }
+): Promise<(User & { role: Role })[]> {
+  const from = (filters.page - 1) * filters.limit;
+  const to = from + filters.limit - 1;
+
+  let query = supabase
+    .from("users")
+    .select("*, role:roles!inner(*)")
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
+
+  if (filters.isActive !== undefined) {
+    query = query.eq("is_active", filters.isActive);
+  }
+
+  if (filters.role) {
+    query = query.eq("roles.name", filters.role);
+  }
+
+  if (filters.search) {
+    const searchPattern = `%${filters.search}%`;
+    query = query.or(
+      `full_name.ilike.${searchPattern},username.ilike.${searchPattern},email.ilike.${searchPattern},phone.ilike.${searchPattern}`
+    );
+  }
+
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    throw error;
+  }
+
+  return data as any;
+}
+
+/**
+ * Counts non-deleted users matching search/filter criteria within an organization.
+ */
+export async function countUsers(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  filters: {
+    search?: string;
+    role?: AppRole;
+    isActive?: boolean;
+  }
+): Promise<number> {
+  let query = supabase
+    .from("users")
+    .select("id, role:roles!inner(name)", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
+
+  if (filters.isActive !== undefined) {
+    query = query.eq("is_active", filters.isActive);
+  }
+
+  if (filters.role) {
+    query = query.eq("roles.name", filters.role);
+  }
+
+  if (filters.search) {
+    const searchPattern = `%${filters.search}%`;
+    query = query.or(
+      `full_name.ilike.${searchPattern},username.ilike.${searchPattern},email.ilike.${searchPattern},phone.ilike.${searchPattern}`
+    );
+  }
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return count || 0;
+}
+
 
 

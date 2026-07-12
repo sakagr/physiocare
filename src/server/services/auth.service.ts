@@ -45,6 +45,44 @@ export async function deleteUser(
 }
 
 /**
+ * Disables an authentication user in Supabase Auth by setting a long ban duration.
+ * 
+ * @param adminClient - The service-role Supabase client.
+ * @param userId - The ID of the authentication user.
+ */
+export async function setUserDisabled(
+  adminClient: SupabaseClient<Database>,
+  userId: string
+): Promise<void> {
+  const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    ban_duration: "876000h", // 100 years ban
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * Enables an authentication user in Supabase Auth by lifting any active ban.
+ * 
+ * @param adminClient - The service-role Supabase client.
+ * @param userId - The ID of the authentication user.
+ */
+export async function setUserEnabled(
+  adminClient: SupabaseClient<Database>,
+  userId: string
+): Promise<void> {
+  const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    ban_duration: "none",
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
  * Creates a new authentication user in Supabase Auth.
  * 
  * @param adminClient - The service-role Supabase client.

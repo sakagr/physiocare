@@ -15,7 +15,25 @@ Before writing or modifying any Next.js code:
 
 These guidelines define the architecture and coding conventions for the PhysioCare codebase.
 
+
 AI agents should follow these conventions unless explicitly instructed otherwise.
+
+# Project Roadmap
+
+The high-level product roadmap is defined in [ROADMAP.md](ROADMAP.md).
+
+AI agents should consult `ROADMAP.md` to understand:
+
+- Overall project phases.
+- Planned feature progression.
+- Current development phase.
+- Module sequencing.
+
+`ROADMAP.md` defines **what** will be built and **when**.
+
+`AGENTS.md` defines **how** the project should be built, including architecture, engineering conventions, coding standards, and development workflow.
+
+If an implementation plan conflicts with the roadmap, the implementation plan takes precedence for the current task. If engineering conventions conflict with the roadmap, `AGENTS.md` takes precedence.
 
 ---
 
@@ -576,7 +594,6 @@ Organization roles include:
 - `ORG_ADMIN`
 - `ORG_PHYSIOTHERAPIST`
 - `ORG_RECEPTIONIST`
-- `ORG_ACCOUNTANT`
 
 Platform users do not belong to an organization.
 
@@ -877,14 +894,12 @@ ORG_OWNER
     ├── ORG_OWNER
     ├── ORG_ADMIN
     ├── ORG_PHYSIOTHERAPIST
-    ├── ORG_RECEPTIONIST
-    └── ORG_ACCOUNTANT
+    └── ORG_RECEPTIONIST
 
 ORG_ADMIN
     │
     ├── ORG_PHYSIOTHERAPIST
-    ├── ORG_RECEPTIONIST
-    └── ORG_ACCOUNTANT
+    └── ORG_RECEPTIONIST
 ```
 
 Current platform roles do not participate in organization user management.

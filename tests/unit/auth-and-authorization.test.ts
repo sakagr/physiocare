@@ -19,7 +19,7 @@ describe("generateInitialPassword", () => {
 
 describe("role hierarchy", () => {
   it("allows an owner to manage all organization roles", () => {
-    for (const role of ["ORG_OWNER", "ORG_ADMIN", "ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST", "ORG_ACCOUNTANT"] as const) {
+    for (const role of ["ORG_OWNER", "ORG_ADMIN", "ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST"] as const) {
       expect(canManageRole("ORG_OWNER", role)).toBe(true);
     }
   });
@@ -27,13 +27,12 @@ describe("role hierarchy", () => {
   it("allows an administrator to manage employee roles only", () => {
     expect(canManageRole("ORG_ADMIN", "ORG_PHYSIOTHERAPIST")).toBe(true);
     expect(canManageRole("ORG_ADMIN", "ORG_RECEPTIONIST")).toBe(true);
-    expect(canManageRole("ORG_ADMIN", "ORG_ACCOUNTANT")).toBe(true);
     expect(canManageRole("ORG_ADMIN", "ORG_OWNER")).toBe(false);
     expect(canManageRole("ORG_ADMIN", "ORG_ADMIN")).toBe(false);
   });
 
   it("prevents employees and platform support roles from managing organization users", () => {
-    for (const caller of ["ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST", "ORG_ACCOUNTANT", "PLATFORM_SUPPORT", "PLATFORM_SALES", "PLATFORM_BILLING"] as const) {
+    for (const caller of ["ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST", "PLATFORM_SUPPORT", "PLATFORM_SALES", "PLATFORM_BILLING"] as const) {
       expect(canManageRole(caller, "ORG_PHYSIOTHERAPIST")).toBe(false);
     }
   });

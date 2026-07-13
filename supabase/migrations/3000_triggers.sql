@@ -78,10 +78,6 @@ create trigger set_notifications_updated_at
 before update on public.notifications
 for each row execute function public.set_updated_at();
 
-create trigger set_audit_logs_updated_at
-before update on public.audit_logs
-for each row execute function public.set_updated_at();
-
 create trigger set_user_attendance_updated_at
 before update on public.user_attendance
 for each row execute function public.set_updated_at();

@@ -39,7 +39,6 @@ export const createOrganizationUserSchema = z.object({
       "ORG_ADMIN",
       "ORG_PHYSIOTHERAPIST",
       "ORG_RECEPTIONIST",
-      "ORG_ACCOUNTANT",
     ])
     .refine((val): val is AppRole => val.startsWith("ORG_"), {
       message: "Only organization roles are allowed.",
@@ -105,7 +104,6 @@ export const changeUserRoleSchema = z.object({
       "ORG_ADMIN",
       "ORG_PHYSIOTHERAPIST",
       "ORG_RECEPTIONIST",
-      "ORG_ACCOUNTANT",
     ])
     .refine((val): val is AppRole => val.startsWith("ORG_"), {
       message: "Only organization roles are allowed.",

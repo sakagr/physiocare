@@ -21,7 +21,7 @@ describeIntegration("User lifecycle", () => {
     await expect(createOrganizationUser(ctx.admin, ctx.admin, owner.id, { ...input, username: `${ctx.runId}-employee-two`.slice(0, 50) }))
       .rejects.toMatchObject({ code: ErrorCodes.EMAIL_ALREADY_EXISTS });
     expect((await updateUserProfile(ctx.admin, owner.id, created.userId, { fullName: "Updated Employee", phone: "9123456789" })).full_name).toBe("Updated Employee");
-    expect((await changeUserRole(ctx.admin, owner.id, created.userId, "ORG_ACCOUNTANT")).role_id).toBe(await ctx.roleId("ORG_ACCOUNTANT"));
+    expect((await changeUserRole(ctx.admin, owner.id, created.userId, "ORG_RECEPTIONIST")).role_id).toBe(await ctx.roleId("ORG_RECEPTIONIST"));
     expect((await deactivateUser(ctx.admin, ctx.admin, owner.id, created.userId)).is_active).toBe(false);
     expect((await activateUser(ctx.admin, ctx.admin, owner.id, created.userId)).is_active).toBe(true);
   });

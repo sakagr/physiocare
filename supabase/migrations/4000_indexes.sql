@@ -58,7 +58,6 @@ create index payments_invoice_id_idx on public.payments(invoice_id);
 create index payments_received_by_idx on public.payments(received_by);
 
 create index packages_organization_id_idx on public.packages(organization_id);
-create index packages_clinic_id_idx on public.packages(clinic_id);
 
 create index patient_packages_organization_id_idx on public.patient_packages(organization_id);
 create index patient_packages_patient_id_idx on public.patient_packages(patient_id);

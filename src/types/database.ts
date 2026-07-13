@@ -183,40 +183,34 @@ export type Database = {
         Row: {
           action: string
           created_at: string
-          deleted_at: string | null
           entity_id: string
           entity_name: string
           id: string
           new_data: Json | null
           old_data: Json | null
           organization_id: string
-          updated_at: string
           user_id: string | null
         }
         Insert: {
           action: string
           created_at?: string
-          deleted_at?: string | null
           entity_id: string
           entity_name: string
           id?: string
           new_data?: Json | null
           old_data?: Json | null
           organization_id: string
-          updated_at?: string
           user_id?: string | null
         }
         Update: {
           action?: string
           created_at?: string
-          deleted_at?: string | null
           entity_id?: string
           entity_name?: string
           id?: string
           new_data?: Json | null
           old_data?: Json | null
           organization_id?: string
-          updated_at?: string
           user_id?: string | null
         }
         Relationships: [
@@ -473,7 +467,7 @@ export type Database = {
           invoice_number: string
           organization_id: string
           patient_id: string
-          payment_status: Database["public"]["Enums"]["payment_status"]
+          patient_package_id: string | null
           subtotal: number
           total_amount: number
           updated_at: string
@@ -491,7 +485,7 @@ export type Database = {
           invoice_number: string
           organization_id: string
           patient_id: string
-          payment_status?: Database["public"]["Enums"]["payment_status"]
+          patient_package_id?: string | null
           subtotal?: number
           total_amount?: number
           updated_at?: string
@@ -509,7 +503,7 @@ export type Database = {
           invoice_number?: string
           organization_id?: string
           patient_id?: string
-          payment_status?: Database["public"]["Enums"]["payment_status"]
+          patient_package_id?: string | null
           subtotal?: number
           total_amount?: number
           updated_at?: string
@@ -548,6 +542,13 @@ export type Database = {
             columns: ["organization_id", "patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "invoices_organization_id_patient_package_id_fkey"
+            columns: ["organization_id", "patient_package_id"]
+            isOneToOne: false
+            referencedRelation: "patient_packages"
             referencedColumns: ["organization_id", "id"]
           },
         ]
@@ -759,7 +760,6 @@ export type Database = {
       }
       packages: {
         Row: {
-          clinic_id: string
           created_at: string
           deleted_at: string | null
           id: string
@@ -772,7 +772,6 @@ export type Database = {
           validity_days: number
         }
         Insert: {
-          clinic_id: string
           created_at?: string
           deleted_at?: string | null
           id?: string
@@ -785,7 +784,6 @@ export type Database = {
           validity_days: number
         }
         Update: {
-          clinic_id?: string
           created_at?: string
           deleted_at?: string | null
           id?: string
@@ -799,13 +797,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "packages_organization_id_clinic_id_fkey"
-            columns: ["organization_id", "clinic_id"]
-            isOneToOne: false
-            referencedRelation: "clinics"
-            referencedColumns: ["organization_id", "id"]
-          },
-          {
             foreignKeyName: "packages_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -817,11 +808,14 @@ export type Database = {
       patient_packages: {
         Row: {
           created_at: string
+          deleted_at: string | null
           expiry_date: string
           extended_validity_to: string | null
           id: string
           organization_id: string
           package_id: string
+          package_name: string
+          package_price: number
           patient_id: string
           purchased_on: string
           remaining_sessions: number
@@ -832,11 +826,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           expiry_date: string
           extended_validity_to?: string | null
           id?: string
           organization_id: string
           package_id: string
+          package_name: string
+          package_price: number
           patient_id: string
           purchased_on?: string
           remaining_sessions: number
@@ -847,11 +844,14 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           expiry_date?: string
           extended_validity_to?: string | null
           id?: string
           organization_id?: string
           package_id?: string
+          package_name?: string
+          package_price?: number
           patient_id?: string
           purchased_on?: string
           remaining_sessions?: number
@@ -1021,6 +1021,7 @@ export type Database = {
           organization_id: string
           paid_at: string
           payment_mode: Database["public"]["Enums"]["payment_mode"]
+          payment_status: Database["public"]["Enums"]["payment_transaction_status"]
           received_by: string | null
           transaction_reference: string | null
           updated_at: string
@@ -1034,6 +1035,7 @@ export type Database = {
           organization_id: string
           paid_at?: string
           payment_mode: Database["public"]["Enums"]["payment_mode"]
+          payment_status?: Database["public"]["Enums"]["payment_transaction_status"]
           received_by?: string | null
           transaction_reference?: string | null
           updated_at?: string
@@ -1047,6 +1049,7 @@ export type Database = {
           organization_id?: string
           paid_at?: string
           payment_mode?: Database["public"]["Enums"]["payment_mode"]
+          payment_status?: Database["public"]["Enums"]["payment_transaction_status"]
           received_by?: string | null
           transaction_reference?: string | null
           updated_at?: string
@@ -1206,7 +1209,7 @@ export type Database = {
       user_attendance: {
         Row: {
           attendance_date: string
-          check_in_time: string
+          check_in_time: string | null
           check_out_time: string | null
           clinic_id: string
           created_at: string
@@ -1220,7 +1223,7 @@ export type Database = {
         }
         Insert: {
           attendance_date: string
-          check_in_time: string
+          check_in_time?: string | null
           check_out_time?: string | null
           clinic_id: string
           created_at?: string
@@ -1234,7 +1237,7 @@ export type Database = {
         }
         Update: {
           attendance_date?: string
-          check_in_time?: string
+          check_in_time?: string | null
           check_out_time?: string | null
           clinic_id?: string
           created_at?: string
@@ -1407,7 +1410,6 @@ export type Database = {
         | "ORG_ADMIN"
         | "ORG_PHYSIOTHERAPIST"
         | "ORG_RECEPTIONIST"
-        | "ORG_ACCOUNTANT"
       appointment_status:
         | "scheduled"
         | "confirmed"
@@ -1441,6 +1443,7 @@ export type Database = {
         | "paid"
         | "refunded"
         | "cancelled"
+      payment_transaction_status: "completed" | "refunded" | "cancelled"
       recipient_type: "user" | "patient"
       subscription_status:
         | "inactive"
@@ -1588,7 +1591,6 @@ export const Constants = {
         "ORG_ADMIN",
         "ORG_PHYSIOTHERAPIST",
         "ORG_RECEPTIONIST",
-        "ORG_ACCOUNTANT",
       ],
       appointment_status: [
         "scheduled",
@@ -1627,6 +1629,7 @@ export const Constants = {
         "refunded",
         "cancelled",
       ],
+      payment_transaction_status: ["completed", "refunded", "cancelled"],
       recipient_type: ["user", "patient"],
       subscription_status: [
         "inactive",

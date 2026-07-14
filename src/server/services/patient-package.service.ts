@@ -11,14 +11,70 @@ import {
   countOrganizationPatientPackages,
   existsInvoiceForPatientPackage,
 } from "../repositories/patient-package.repository";
-import { listByPatientPackage, countByPatientPackage, type PackageSessionUsage } from "../repositories/package-session-usage.repository";
+import {
+  listByPatientPackage,
+  countByPatientPackage,
+  findUsageByAppointmentId,
+  consumePackageSession as persistConsumePackageSession,
+  reversePackageSessionUsage as persistReversePackageSessionUsage,
+  type PackageSessionUsage,
+} from "../repositories/package-session-usage.repository";
 import { findUserById } from "../repositories/user.repository";
 import { findPatientById } from "../repositories/patient.repository";
 import { findPackageById } from "../repositories/package.repository";
-import { canViewPatientPackages, canManagePatientPackages } from "./authorization.service";
+import {
+  canViewPatientPackages,
+  canManagePatientPackages,
+  canCorrectPackageSessionUsage,
+  canOrganizationTransact,
+} from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePatientPackageInput, UpdatePatientPackageInput } from "../validators/patient-package.validator";
+
+/**
+ * True if the package's validity window (extended_validity_to when set,
+ * otherwise expiry_date) has passed as of the given moment.
+ */
+function isPackageExpired(patientPackage: PatientPackage, asOf: Date): boolean {
+  const validThrough = patientPackage.extended_validity_to ?? patientPackage.expiry_date;
+  return asOf > new Date(validThrough);
+}
+
+/**
+ * Lazily transitions an active patient package to "expired" if its validity
+ * window has passed. No scheduled job -- evaluated whenever a patient
+ * package is individually read or written.
+ */
+async function evaluatePackageExpiry(
+  supabase: SupabaseClient<Database>,
+  patientPackage: PatientPackage
+): Promise<PatientPackage> {
+  if (patientPackage.status === "active" && isPackageExpired(patientPackage, new Date())) {
+    return persistPatientPackageUpdate(supabase, patientPackage.id, { status: "expired" });
+  }
+  return patientPackage;
+}
+
+/**
+ * Maps a matchable exception message raised by the consume_package_session
+ * database function (a concurrency safety net, see AGENTS.md "Database
+ * Functions for Atomic Operations") to the same AppError a well-behaved
+ * caller's pre-check would have thrown.
+ */
+function mapConsumePackageSessionError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("PACKAGE_SESSIONS_EXHAUSTED")) {
+    return new AppError("Patient package has no remaining sessions", ErrorCodes.PACKAGE_SESSIONS_EXHAUSTED);
+  }
+  if (message.includes("PACKAGE_SESSION_ALREADY_RECORDED")) {
+    return new AppError("A session has already been recorded for this appointment", ErrorCodes.PACKAGE_SESSION_ALREADY_RECORDED);
+  }
+  if (message.includes("PATIENT_PACKAGE_NOT_FOUND")) {
+    return new AppError("Patient package not found", ErrorCodes.NOT_FOUND);
+  }
+  return error instanceof Error ? error : new Error(message);
+}
 
 /**
  * Assigns a package to a patient, snapshotting the package's name, price,
@@ -38,6 +94,11 @@ export async function createPatientPackage(
   const caller = await findUserById(supabase, callerUserId);
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
+  }
+
+  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
+  if (!isTransactable) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
   }
 
   const patient = await findPatientById(supabase, input.patientId);
@@ -98,6 +159,8 @@ export async function updatePatientPackage(
   if (patientPackage.organization_id !== caller.organization_id) {
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
+
+  await evaluatePackageExpiry(supabase, patientPackage);
 
   return persistPatientPackageUpdate(supabase, patientPackageId, {
     extended_validity_to: input.extendedValidityTo !== undefined ? input.extendedValidityTo : undefined,
@@ -172,7 +235,7 @@ export async function getPatientPackageDetails(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return patientPackage;
+  return evaluatePackageExpiry(supabase, patientPackage);
 }
 
 /**
@@ -255,8 +318,101 @@ export async function listOrganizationPatientPackages(
 }
 
 /**
- * Lists session usage history for a patient package (read-only in this
- * phase -- see Phase 8 for consumption logic).
+ * Records a package session consumption for an appointment. Called by the
+ * appointment-completion workflow (see appointment-workflow.service.ts),
+ * never directly by a route -- authorization for the underlying appointment
+ * transition has already been checked by that caller.
+ *
+ * Pre-checks expiry, exhaustion, and double-consumption for a clean error on
+ * the common path; the underlying consume_package_session database function
+ * re-checks the same invariants under a row lock as a concurrency safety
+ * net (see AGENTS.md "Database Functions for Atomic Operations").
+ */
+export async function consumePackageSession(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  patientPackageId: string,
+  appointmentId: string
+): Promise<PackageSessionUsage> {
+  const isTransactable = await canOrganizationTransact(supabase, organizationId);
+  if (!isTransactable) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
+  }
+
+  const patientPackage = await findPatientPackageById(supabase, patientPackageId);
+  if (!patientPackage || patientPackage.organization_id !== organizationId) {
+    throw new AppError("Patient package not found", ErrorCodes.NOT_FOUND);
+  }
+
+  const evaluated = await evaluatePackageExpiry(supabase, patientPackage);
+  if (evaluated.status === "expired") {
+    throw new AppError("Patient package has expired", ErrorCodes.PACKAGE_EXPIRED);
+  }
+
+  if (evaluated.remaining_sessions <= 0) {
+    throw new AppError("Patient package has no remaining sessions", ErrorCodes.PACKAGE_SESSIONS_EXHAUSTED);
+  }
+
+  if (await findUsageByAppointmentId(supabase, appointmentId)) {
+    throw new AppError("A session has already been recorded for this appointment", ErrorCodes.PACKAGE_SESSION_ALREADY_RECORDED);
+  }
+
+  try {
+    return await persistConsumePackageSession(supabase, { organizationId, patientPackageId, appointmentId });
+  } catch (error) {
+    throw mapConsumePackageSessionError(error);
+  }
+}
+
+/**
+ * Reverses a package session consumption for an appointment, restoring the
+ * parent patient package's balance. A no-op if the appointment was never
+ * package-linked. Called by the appointment-completion workflow when a
+ * completed appointment is transitioned to cancelled.
+ */
+export async function reversePackageSessionConsumption(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  appointmentId: string
+): Promise<void> {
+  await persistReversePackageSessionUsage(supabase, { organizationId, appointmentId });
+}
+
+/**
+ * Administrative correction: soft-deletes a wrongly-recorded session usage
+ * (wrong package, duplicate entry, wrong appointment link), restoring the
+ * balance. The caller records a fresh, correct consumption via a separate
+ * consumePackageSession() call -- this function only undoes the mistake.
+ * ORG_OWNER/ORG_ADMIN only, narrower than general patient-package
+ * management.
+ */
+export async function correctPackageSessionUsage(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  appointmentId: string
+): Promise<void> {
+  const isAuthorized = await canCorrectPackageSessionUsage(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller || !caller.organization_id) {
+    throw new Error("Caller must belong to a valid organization");
+  }
+
+  const reversed = await persistReversePackageSessionUsage(supabase, {
+    organizationId: caller.organization_id,
+    appointmentId,
+  });
+
+  if (!reversed) {
+    throw new AppError("No session usage record found for this appointment", ErrorCodes.NOT_FOUND);
+  }
+}
+
+/**
+ * Lists session usage history for a patient package.
  */
 export async function listPatientPackageUsage(
   supabase: SupabaseClient<Database>,

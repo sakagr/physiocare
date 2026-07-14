@@ -153,6 +153,7 @@ Service boundaries:
 - `authorization.service.ts` determines whether the caller is authorized to perform an operation.
 - `user.service.ts` encapsulates user-related business rules and profile management.
 - `auth.service.ts` encapsulates all Supabase Auth interactions.
+- `appointment-workflow.service.ts` orchestrates an appointment status transition together with its cross-domain side effect on package session consumption (Appointment domain + Patient Package domain). Neither `appointment.service.ts` nor `patient-package.service.ts` calls the other directly.
 
 Service naming convention:
 
@@ -549,7 +550,7 @@ Possible states:
 - active
   - Organization is fully operational.
 
-- suspended
+- inactive
   - Organization has been temporarily disabled.
 
 - archived
@@ -1090,6 +1091,22 @@ if (error) {
 ```
 
 Do not inspect PostgREST error codes when `maybeSingle()` can naturally represent the "not found" case.
+
+---
+
+# Database Functions for Atomic Operations
+
+Some operations touch multiple rows across tables and must succeed or fail as a single unit, in a way a sequence of Supabase client calls cannot guarantee (e.g. a session-consumption write that must never leave a usage record without its corresponding balance update, even under concurrent access).
+
+For these cases, implement a `plpgsql` function in a migration and call it from the repository layer via `supabase.rpc(...)`, instead of issuing multiple sequential writes from the application.
+
+Rules:
+
+- Default to `security invoker` (the caller's own RLS-authenticated role) so RLS policies still apply to every statement inside it. Use `security definer` only when a legitimate, already-authorized caller (per the Service layer's own authorization check) would otherwise be blocked by a table-level RLS policy that is deliberately narrower than this one specific operation — e.g. a role that may trigger a tightly-scoped counter update but must not gain free-form `UPDATE` on that table via raw client access. A `security definer` function must still take its scoping identifiers (organization ID, etc.) as parameters sourced from the caller's own resolved identity in the service layer, never from unvalidated client input, and must have `EXECUTE` explicitly revoked from `PUBLIC` and granted only to the roles that need it.
+- The function is limited to structural-integrity guarantees a single client round-trip can't provide — atomic multi-row writes and row-locked invariant checks (`for update`). It must not encode business-rule branching or workflow decisions; those stay in the Service layer, exactly as with any other business rule.
+- Primary validation and user-facing error messages still belong in the calling service, checked *before* invoking the function. The function's internal checks are a concurrency safety net, not the primary validation path — the same role a `CHECK` constraint already plays elsewhere in this schema.
+- The function raises a plain `raise exception` with a fixed, matchable message on its internal safety-net failures; the calling repository/service maps that message back to the same `AppError` code the pre-check would have thrown, so callers never see a raw Postgres error.
+- Repository functions that call `.rpc(...)` follow the same conventions as any other repository method (check `error`, throw on unexpected failure, return `data`) — invoking a stored function is still a persistence concern, not business logic.
 
 ---
 

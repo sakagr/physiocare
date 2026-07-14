@@ -80,9 +80,40 @@ export function setupIntegrationContext(suffix: string): IntegrationContext {
   };
 
   context.createOrganization = async (name) => {
+    // subscription_plan_id is not-null and every other module's tests need
+    // to freely create clinics/users without hitting a plan ceiling, so
+    // fixture organizations get a dedicated, generously-limited plan rather
+    // than the real NO_SUBSCRIPTION system plan (max_clinics/max_users = 1,
+    // see 20260716000300_subscription_enforcement.sql) -- organization-limits.test.ts
+    // and subscription-enforcement.test.ts cover NO_SUBSCRIPTION/limit
+    // behavior directly with their own purpose-built plans. subscription_status
+    // is "active" here (not the real bootstrap default of "inactive") purely
+    // so canOrganizationTransact() doesn't block every other module's tests.
+    // Concurrent test files may race to create this fixture plan -- upsert
+    // on the unique plan_name so a losing concurrent insert doesn't error.
+    const { error: upsertError } = await context.admin
+      .from("subscription_plans")
+      .upsert(
+        { plan_name: "Integration Test Fixture Plan", max_clinics: 1000, max_users: 1000, monthly_price: 0, yearly_price: 0 },
+        { onConflict: "plan_name", ignoreDuplicates: true }
+      );
+    if (upsertError) throw upsertError;
+
+    const { data: plan, error: planError } = await context.admin
+      .from("subscription_plans")
+      .select("id")
+      .eq("plan_name", "Integration Test Fixture Plan")
+      .single();
+    if (planError) throw planError;
+
     const { data, error } = await context.admin
       .from("organizations")
-      .insert({ organization_name: name, status: "active" })
+      .insert({
+        organization_name: name,
+        status: "active",
+        subscription_plan_id: plan.id,
+        subscription_status: "active",
+      })
       .select()
       .single();
     if (error) throw error;

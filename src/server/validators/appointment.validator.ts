@@ -29,9 +29,14 @@ export const updateAppointmentSchema = z.object({
 
 /**
  * Validation schema for updating an appointment's status.
+ * patientPackageId is only meaningful when transitioning to "completed": it
+ * identifies which patient package session to consume. An appointment has
+ * no intrinsic package linkage of its own -- it becomes package-linked only
+ * when a caller supplies this at completion time.
  */
 export const updateAppointmentStatusSchema = z.object({
   status: appointmentStatusSchema,
+  patientPackageId: z.string().uuid({ message: "Invalid patient package ID format." }).optional(),
 });
 
 /**

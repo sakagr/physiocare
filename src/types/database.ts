@@ -643,10 +643,9 @@ export type Database = {
           organization_name: string
           status: Database["public"]["Enums"]["organization_status"]
           subscription_ends_at: string | null
-          subscription_plan_id: string | null
+          subscription_plan_id: string
           subscription_starts_at: string | null
           subscription_status: Database["public"]["Enums"]["subscription_status"]
-          trial_ends_at: string | null
           updated_at: string
         }
         Insert: {
@@ -658,10 +657,9 @@ export type Database = {
           organization_name: string
           status?: Database["public"]["Enums"]["organization_status"]
           subscription_ends_at?: string | null
-          subscription_plan_id?: string | null
+          subscription_plan_id: string
           subscription_starts_at?: string | null
           subscription_status?: Database["public"]["Enums"]["subscription_status"]
-          trial_ends_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -673,10 +671,9 @@ export type Database = {
           organization_name?: string
           status?: Database["public"]["Enums"]["organization_status"]
           subscription_ends_at?: string | null
-          subscription_plan_id?: string | null
+          subscription_plan_id?: string
           subscription_starts_at?: string | null
           subscription_status?: Database["public"]["Enums"]["subscription_status"]
-          trial_ends_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1328,10 +1325,66 @@ export type Database = {
           },
         ]
       }
+      user_compensations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          id: string
+          organization_id: string
+          type: Database["public"]["Enums"]["commission_type"]
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          id?: string
+          organization_id: string
+          type?: Database["public"]["Enums"]["commission_type"]
+          updated_at?: string
+          user_id: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          id?: string
+          organization_id?: string
+          type?: Database["public"]["Enums"]["commission_type"]
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_compensations_organization_id_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "user_compensations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_compensations_organization_id_user_id_fkey"
+            columns: ["organization_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       users: {
         Row: {
-          commission_type: Database["public"]["Enums"]["commission_type"]
-          commission_value: number
           created_at: string
           deleted_at: string | null
           email: string
@@ -1345,8 +1398,6 @@ export type Database = {
           username: string
         }
         Insert: {
-          commission_type?: Database["public"]["Enums"]["commission_type"]
-          commission_value?: number
           created_at?: string
           deleted_at?: string | null
           email: string
@@ -1360,8 +1411,6 @@ export type Database = {
           username: string
         }
         Update: {
-          commission_type?: Database["public"]["Enums"]["commission_type"]
-          commission_value?: number
           created_at?: string
           deleted_at?: string | null
           email?: string
@@ -1396,9 +1445,52 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_package_session: {
+        Args: {
+          p_appointment_id: string
+          p_organization_id: string
+          p_patient_package_id: string
+          p_used_on?: string
+        }
+        Returns: {
+          appointment_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          organization_id: string
+          patient_package_id: string
+          updated_at: string
+          used_on: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "package_session_usage"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       current_organization_id: { Args: never; Returns: string }
       current_user_role: { Args: never; Returns: string }
       is_super_admin: { Args: never; Returns: boolean }
+      reverse_package_session_usage: {
+        Args: { p_appointment_id: string; p_organization_id: string }
+        Returns: {
+          appointment_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          organization_id: string
+          patient_package_id: string
+          updated_at: string
+          used_on: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "package_session_usage"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       app_role:

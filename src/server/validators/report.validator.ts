@@ -42,12 +42,31 @@ export const physiotherapistReportQuerySchema = z
   });
 
 /**
+ * Validation schema for the commission report query. Same range-bounded
+ * shape as the physiotherapist report; "Monthly" describes a practical
+ * usage pattern (a month-sized dateFrom/dateTo), not a distinct
+ * calendar-bucketed report shape.
+ */
+export const commissionReportQuerySchema = z
+  .object({
+    dateFrom: z.string().date({ message: "Invalid date." }),
+    dateTo: z.string().date({ message: "Invalid date." }),
+    physiotherapistId: z.string().uuid({ message: "Invalid physiotherapist ID format." }).optional(),
+  })
+  .refine((v) => v.dateTo >= v.dateFrom, { message: "dateTo must be on or after dateFrom.", path: ["dateTo"] })
+  .refine((v) => daysBetween(v.dateFrom, v.dateTo) <= MAX_REPORT_RANGE_DAYS, {
+    message: `Report range cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`,
+    path: ["dateTo"],
+  });
+
+/**
  * Validation schema for an export request's output format.
  */
 export const exportFormatSchema = z.enum(["xlsx", "pdf"]);
 
 export type BillingReportQuery = z.infer<typeof billingReportQuerySchema>;
 export type PhysiotherapistReportQuery = z.infer<typeof physiotherapistReportQuerySchema>;
+export type CommissionReportQuery = z.infer<typeof commissionReportQuerySchema>;
 export type ExportFormat = z.infer<typeof exportFormatSchema>;
 
 export function validateBillingReportQuery(input: unknown): BillingReportQuery {
@@ -56,6 +75,10 @@ export function validateBillingReportQuery(input: unknown): BillingReportQuery {
 
 export function validatePhysiotherapistReportQuery(input: unknown): PhysiotherapistReportQuery {
   return physiotherapistReportQuerySchema.parse(input);
+}
+
+export function validateCommissionReportQuery(input: unknown): CommissionReportQuery {
+  return commissionReportQuerySchema.parse(input);
 }
 
 export function validateExportFormat(input: unknown): ExportFormat {

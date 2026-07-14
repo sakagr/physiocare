@@ -8,6 +8,10 @@ import { findConsultationById } from "../repositories/consultation.repository";
 import { findPrescriptionById } from "../repositories/prescription.repository";
 import { findInvoiceById } from "../repositories/invoice.repository";
 import { findPaymentById } from "../repositories/payment.repository";
+import { findOrganizationById } from "../repositories/organization.repository";
+import { findSubscriptionPlanById } from "../repositories/subscription.repository";
+import { countClinics } from "../repositories/clinic.repository";
+import { countUsers } from "../repositories/user.repository";
 
 /**
  * Centralized mapping of role management administrative capabilities.
@@ -42,6 +46,9 @@ export function canManageRole(callerRole: AppRole, targetRole: AppRole): boolean
 
 /** Roles authorized for administrative management gates (org-admin tier). */
 const ORG_MANAGEMENT_ROLES: AppRole[] = ["ORG_OWNER", "ORG_ADMIN", "SUPER_ADMIN"];
+
+/** Platform roles authorized to activate/renew an organization's subscription. */
+const PLATFORM_BILLING_ROLES: AppRole[] = ["SUPER_ADMIN", "PLATFORM_BILLING"];
 
 /** Roles authorized for front-desk-level management gates (org-admin tier plus receptionist). */
 const ORG_FRONT_DESK_ROLES: AppRole[] = [
@@ -275,6 +282,119 @@ export async function canManagePatientPackages(
   callerUserId: string
 ): Promise<boolean> {
   return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
+}
+
+/**
+ * Checks if a caller may correct a package session usage record (soft-delete
+ * a wrongly-recorded consumption). Narrower than general patient-package
+ * management -- excludes ORG_RECEPTIONIST, matching the RLS delete policy
+ * on package_session_usage.
+ */
+export async function canCorrectPackageSessionUsage(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+}
+
+/**
+ * Checks if a caller may set or update a user's compensation record.
+ * ORG_OWNER/ORG_ADMIN only, matching the RLS insert/update policies on
+ * user_compensations.
+ */
+export async function canManageCompensation(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+}
+
+/**
+ * Checks if an organization is currently allowed to perform a write
+ * operation ("use the product"): its operational status is active, and its
+ * subscription is trialing, active, or past_due (a past_due subscription
+ * retains access for a grace period -- see Subscription Renewal Workflow).
+ * Not role-based -- this gates the organization itself, independent of who
+ * the caller is.
+ */
+export async function canOrganizationTransact(
+  supabase: SupabaseClient<Database>,
+  organizationId: string
+): Promise<boolean> {
+  const organization = await findOrganizationById(supabase, organizationId);
+  if (!organization) {
+    return false;
+  }
+  return organization.status === "active" && ["trialing", "active", "past_due"].includes(organization.subscription_status);
+}
+
+/**
+ * Checks if a caller may select a subscription plan for an organization.
+ * ORG_OWNER may select for their own organization (self-service); platform
+ * billing roles may select on behalf of any organization (sales-assisted
+ * selection). The service layer enforces which organization a non-platform
+ * caller may target.
+ */
+export async function canManageSubscription(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ["ORG_OWNER", ...PLATFORM_BILLING_ROLES]);
+}
+
+/**
+ * Checks if a caller may activate or renew an organization's subscription.
+ * Platform billing roles only -- unlike plan selection, this is never
+ * self-service (no payment automation exists in this codebase yet).
+ */
+export async function canActivateSubscription(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, PLATFORM_BILLING_ROLES);
+}
+
+/**
+ * Checks if an organization has room under its subscription plan's
+ * max_clinics to create one more clinic. Not role-based -- gates the
+ * organization's plan ceiling, independent of who the caller is. Every
+ * organization always has a real plan (NO_SUBSCRIPTION at minimum), so
+ * there is no null-plan case to special-case.
+ */
+export async function canCreateClinicWithinLimit(
+  supabase: SupabaseClient<Database>,
+  organizationId: string
+): Promise<boolean> {
+  const organization = await findOrganizationById(supabase, organizationId);
+  if (!organization) {
+    return false;
+  }
+  const plan = await findSubscriptionPlanById(supabase, organization.subscription_plan_id);
+  if (!plan) {
+    return false;
+  }
+  const clinicCount = await countClinics(supabase, organizationId, {});
+  return clinicCount < plan.max_clinics;
+}
+
+/**
+ * Checks if an organization has room under its subscription plan's
+ * max_users to create one more user.
+ */
+export async function canCreateUserWithinLimit(
+  supabase: SupabaseClient<Database>,
+  organizationId: string
+): Promise<boolean> {
+  const organization = await findOrganizationById(supabase, organizationId);
+  if (!organization) {
+    return false;
+  }
+  const plan = await findSubscriptionPlanById(supabase, organization.subscription_plan_id);
+  if (!plan) {
+    return false;
+  }
+  const userCount = await countUsers(supabase, organizationId, {});
+  return userCount < plan.max_users;
 }
 
 /**

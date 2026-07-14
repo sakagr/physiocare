@@ -15,7 +15,8 @@ export const createPatientPackageSchema = z.object({
 /**
  * Validation schema for updating a patient package assignment.
  * Session counts and package snapshot fields are never client-writable --
- * they are owned by the purchase itself and by Phase 8's consumption logic.
+ * they are owned by the purchase itself and by the session consumption
+ * workflow (see patient-package.service.ts consumePackageSession()).
  */
 export const updatePatientPackageSchema = z.object({
   extendedValidityTo: z.string().date({ message: "Invalid extended validity date." }).optional(),

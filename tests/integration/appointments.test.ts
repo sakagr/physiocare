@@ -39,8 +39,8 @@ describeIntegration("Appointment lifecycle", () => {
     const rescheduled = await updateAppointment(ctx.admin, owner.id, appointment.id, { notes: "Rescheduled" });
     expect(rescheduled.notes).toBe("Rescheduled");
 
-    const completed = await updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "completed" });
-    expect(completed.status).toBe("completed");
+    const confirmed = await updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "confirmed" });
+    expect(confirmed.status).toBe("confirmed");
 
     await deleteAppointment(ctx.admin, owner.id, appointment.id);
     await expect(getAppointmentDetails(ctx.admin, owner.id, appointment.id)).rejects.toMatchObject({ code: ErrorCodes.NOT_FOUND });
@@ -102,5 +102,54 @@ describeIntegration("Appointment lifecycle", () => {
 
     const physioView = await listOrganizationAppointments(ctx.admin, physio.id, { page: 1, limit: 50 });
     expect(physioView.items.map((a) => a.id)).toEqual([appointment.id]);
+  });
+
+  it("enforces legal status transitions and records a status log entry for each accepted transition", async () => {
+    const { owner, clinic, physio, patient } = await setupOrgWithClinic("status");
+
+    const appointment = await createAppointment(
+      ctx.admin,
+      owner.id,
+      validAppointmentInput({ patientId: patient.id, clinicId: clinic.id, physiotherapistId: physio.id })
+    );
+
+    await expect(
+      updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "completed" })
+    ).rejects.toMatchObject({ code: ErrorCodes.INVALID_APPOINTMENT_STATUS_TRANSITION });
+
+    const confirmed = await updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "confirmed" });
+    expect(confirmed.status).toBe("confirmed");
+
+    const checkedIn = await updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "checked_in" });
+    expect(checkedIn.status).toBe("checked_in");
+
+    const completed = await updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "completed" });
+    expect(completed.status).toBe("completed");
+
+    await expect(
+      updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "scheduled" })
+    ).rejects.toMatchObject({ code: ErrorCodes.INVALID_APPOINTMENT_STATUS_TRANSITION });
+
+    const cancelled = await updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "cancelled" });
+    expect(cancelled.status).toBe("cancelled");
+
+    await expect(
+      updateAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "confirmed" })
+    ).rejects.toMatchObject({ code: ErrorCodes.INVALID_APPOINTMENT_STATUS_TRANSITION });
+
+    const { data: logs, error } = await ctx.admin
+      .from("appointment_status_logs")
+      .select("*")
+      .eq("appointment_id", appointment.id)
+      .order("changed_at", { ascending: true });
+    if (error) throw error;
+
+    expect(logs.map((log) => [log.old_status, log.new_status])).toEqual([
+      ["scheduled", "confirmed"],
+      ["confirmed", "checked_in"],
+      ["checked_in", "completed"],
+      ["completed", "cancelled"],
+    ]);
+    expect(logs.every((log) => log.changed_by === owner.id)).toBe(true);
   });
 });

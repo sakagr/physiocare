@@ -8,6 +8,7 @@ import {
   listAppointments,
   countAppointments,
 } from "../repositories/appointment.repository";
+import { insertAppointmentStatusLog } from "../repositories/appointment-status-log.repository";
 import { findPatientById } from "../repositories/patient.repository";
 import { findClinicById } from "../repositories/clinic.repository";
 import { findUserById, findRoleById } from "../repositories/user.repository";
@@ -18,10 +19,37 @@ import {
   canAccessAppointment,
   canDeleteAppointment,
   getAccessibleClinicIds,
+  canOrganizationTransact,
 } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreateAppointmentInput, UpdateAppointmentInput, UpdateAppointmentStatusInput } from "../validators/appointment.validator";
+
+type AppointmentStatus = Database["public"]["Enums"]["appointment_status"];
+
+/**
+ * Legal appointment status transitions. completed -> cancelled is the only
+ * reversal path (an administrative correction, e.g. an appointment marked
+ * complete by mistake); every other terminal state (cancelled, no_show) is
+ * final.
+ */
+const LEGAL_APPOINTMENT_STATUS_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
+  scheduled: ["confirmed", "checked_in", "cancelled", "no_show"],
+  confirmed: ["checked_in", "cancelled", "no_show"],
+  checked_in: ["completed", "cancelled"],
+  completed: ["cancelled"],
+  cancelled: [],
+  no_show: [],
+};
+
+/**
+ * Pure transition-legality check, exported so appointment-workflow.service.ts
+ * can fail fast before triggering a package-session side effect, without
+ * duplicating this matrix.
+ */
+export function isLegalAppointmentStatusTransition(from: AppointmentStatus, to: AppointmentStatus): boolean {
+  return LEGAL_APPOINTMENT_STATUS_TRANSITIONS[from].includes(to);
+}
 
 export interface AppointmentListFilters {
   page: number;
@@ -52,6 +80,11 @@ export async function createAppointment(
   const caller = await findUserById(supabase, callerUserId);
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
+  }
+
+  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
+  if (!isTransactable) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
   }
 
   const patient = await findPatientById(supabase, input.patientId);
@@ -131,9 +164,9 @@ export async function updateAppointment(
 }
 
 /**
- * Updates an appointment's status. Plain field update — no transition
- * validation and no appointment_status_logs write; both are deferred to
- * Phase 8 (Appointment Status Tracking).
+ * Transitions an appointment's status. Only transitions in
+ * LEGAL_APPOINTMENT_STATUS_TRANSITIONS are allowed; every accepted
+ * transition is recorded in appointment_status_logs.
  */
 export async function updateAppointmentStatus(
   supabase: SupabaseClient<Database>,
@@ -151,7 +184,25 @@ export async function updateAppointmentStatus(
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
 
-  return persistAppointmentUpdate(supabase, appointmentId, { status: input.status });
+  if (!isLegalAppointmentStatusTransition(appointment.status, input.status)) {
+    throw new AppError(
+      `Cannot transition an appointment from ${appointment.status} to ${input.status}`,
+      ErrorCodes.INVALID_APPOINTMENT_STATUS_TRANSITION
+    );
+  }
+
+  const previousStatus = appointment.status;
+  const updated = await persistAppointmentUpdate(supabase, appointmentId, { status: input.status });
+
+  await insertAppointmentStatusLog(supabase, {
+    organization_id: appointment.organization_id,
+    appointment_id: appointment.id,
+    old_status: previousStatus,
+    new_status: input.status,
+    changed_by: callerUserId,
+  });
+
+  return updated;
 }
 
 /**

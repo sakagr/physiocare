@@ -22,9 +22,17 @@ describeIntegration("Organization bootstrap", () => {
     const { data: owner, error: ownerError } = await ctx.admin.from("users").select("*, roles!inner(name)").eq("id", result.adminUserId).single();
     if (ownerError) throw ownerError;
 
-    expect(organization).toMatchObject({ status: "active", created_by: result.adminUserId });
+    expect(organization).toMatchObject({ status: "active", created_by: result.adminUserId, subscription_status: "inactive" });
     expect(owner.username).toBe(result.adminUsername);
     expect((owner.roles as { name: string }).name).toBe("ORG_OWNER");
+
+    const { data: plan, error: planError } = await ctx.admin
+      .from("subscription_plans")
+      .select("plan_name")
+      .eq("id", organization.subscription_plan_id)
+      .single();
+    if (planError) throw planError;
+    expect(plan.plan_name).toBe("NO_SUBSCRIPTION");
   });
 
   it("rejects duplicate organization names before creating another Auth identity", async () => {

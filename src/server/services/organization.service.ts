@@ -9,6 +9,7 @@ import {
   updateOrganizationCreatedBy,
   updateOrganizationStatus,
 } from "../repositories/organization.repository";
+import { findSubscriptionPlanByName } from "../repositories/subscription.repository";
 import { inviteUser, deleteUser, generateInitialPassword, createAuthUser, setUserDisabled, setUserEnabled } from "./auth.service";
 import type { AppRole, UpdateUser, User } from "../repositories/user.repository";
 import { findUserById, updateUser, findRoleByName } from "../repositories/user.repository";
@@ -19,7 +20,15 @@ import {
   createOrganizationUserProfile,
 } from "./user.service";
 import { AppError, ErrorCodes } from "../errors";
-import { canManageTargetUser, canUpdateUserRole, canManageClinics, canAssignUserToClinic } from "./authorization.service";
+import {
+  canManageTargetUser,
+  canUpdateUserRole,
+  canManageClinics,
+  canAssignUserToClinic,
+  canOrganizationTransact,
+  canCreateClinicWithinLimit,
+  canCreateUserWithinLimit,
+} from "./authorization.service";
 import type { CreateClinicInput, UpdateClinicInput } from "../validators/clinic.validator";
 import { findClinicByNameInOrg, findClinicById, type Clinic } from "../repositories/clinic.repository";
 import { createClinicInternal, updateClinicInternal } from "./clinic.service";
@@ -64,11 +73,20 @@ export async function bootstrapOrganization(
   // 4. Invite the administrator using the Auth Service
   const authUser = await inviteUser(adminClient, validatedInput.adminEmail);
 
+  // 4b. Resolve the NO_SUBSCRIPTION system plan. Onboarding still contains
+  // no billing/subscription logic (Subscription Principles, AGENTS.md) --
+  // this is a fixed reference row, not a business decision made here.
+  const noSubscriptionPlan = await findSubscriptionPlanByName(supabase, "NO_SUBSCRIPTION");
+  if (!noSubscriptionPlan) {
+    throw new Error("NO_SUBSCRIPTION system plan is missing; check that migrations have run");
+  }
+
   try {
     // 5. Create the organization with status = "draft"
     const organization = await insertOrganization(supabase, {
       organization_name: validatedInput.organizationName,
       status: "draft",
+      subscription_plan_id: noSubscriptionPlan.id,
     });
 
     // 6. Create the initial organization owner using the User Service
@@ -134,6 +152,16 @@ export async function createOrganizationUser(
   }
 
   const organizationId = creator.organization_id;
+
+  const isTransactable = await canOrganizationTransact(supabase, organizationId);
+  if (!isTransactable) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
+  }
+
+  const isWithinUserLimit = await canCreateUserWithinLimit(supabase, organizationId);
+  if (!isWithinUserLimit) {
+    throw new AppError("Organization has reached its subscription plan's user limit", ErrorCodes.ORGANIZATION_LIMIT_EXCEEDED);
+  }
 
   // 2. Perform duplicate checks
   await ensureUsernameAvailable(supabase, input.username);
@@ -368,6 +396,16 @@ export async function createClinic(
   const caller = await findUserById(supabase, callerUserId);
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
+  }
+
+  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
+  if (!isTransactable) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
+  }
+
+  const isWithinClinicLimit = await canCreateClinicWithinLimit(supabase, caller.organization_id);
+  if (!isWithinClinicLimit) {
+    throw new AppError("Organization has reached its subscription plan's clinic limit", ErrorCodes.ORGANIZATION_LIMIT_EXCEEDED);
   }
 
   // Check clinic name uniqueness within the organization

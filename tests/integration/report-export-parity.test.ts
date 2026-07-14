@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { createClinic, assignUserToClinic } from "@/server/services/organization.service";
 import { createPatient } from "@/server/services/patient.service";
 import { createAppointment } from "@/server/services/appointment.service";
+import { transitionAppointmentStatus } from "@/server/services/appointment-workflow.service";
 import { createInvoice } from "@/server/services/invoice.service";
 import { createPayment } from "@/server/services/payment.service";
 import {
@@ -15,6 +16,12 @@ import {
   PHYSIOTHERAPIST_REPORT_EXPORT_COLUMNS,
   buildPhysiotherapistReportExportSummary,
 } from "@/server/services/physiotherapist-report.service";
+import {
+  setUserCompensation,
+  getCommissionReport,
+  COMMISSION_REPORT_EXPORT_COLUMNS,
+  buildCommissionReportExportSummary,
+} from "@/server/services/commission.service";
 import { generateExcelWorkbook } from "@/server/services/export.service";
 import { validClinicInput, validPatientInput, validAppointmentInput, validInvoiceInput, validPaymentInput } from "../helpers/factories";
 import { describeIntegration, setupIntegrationContext } from "../helpers/integration-context";
@@ -118,5 +125,49 @@ describeIntegration("Report export parity", () => {
     const summaryMap = new Map(summaryRows.map((row) => [row[0], row[1]]));
     expect(summaryMap.get("Appointment Count")).toBe(jsonReport.summary.appointmentCount);
     expect(summaryMap.get("Attributed Revenue")).toBe(jsonReport.summary.attributedRevenue);
+  });
+
+  it("the commission export represents exactly the same rows and summary as the JSON report", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-comm-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "comm-owner");
+    const clinic = await createClinic(ctx.admin, owner.id, validClinicInput(`${ctx.runId}-comm`));
+    const physio = await ctx.createUser(organization.id, "ORG_PHYSIOTHERAPIST", "comm-p");
+    await assignUserToClinic(ctx.admin, owner.id, physio.id, clinic.id);
+    const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-comm`));
+    await setUserCompensation(ctx.admin, owner.id, physio.id, { type: "percentage", value: 10, effectiveFrom: "2026-01-01" });
+
+    const appointment = await createAppointment(ctx.admin, owner.id, {
+      ...validAppointmentInput({ patientId: patient.id, clinicId: clinic.id, physiotherapistId: physio.id }),
+      appointmentTime: "2026-02-10T09:00:00.000Z",
+    });
+    await createInvoice(ctx.admin, owner.id, {
+      ...validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }),
+      appointmentId: appointment.id,
+      invoiceDate: "2026-02-10",
+    });
+    await transitionAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "confirmed" });
+    await transitionAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "checked_in" });
+    await transitionAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "completed" });
+
+    const jsonReport = await getCommissionReport(ctx.admin, owner.id, { dateFrom: "2026-02-01", dateTo: "2026-02-28" });
+
+    const summary = buildCommissionReportExportSummary(jsonReport.summary);
+    const excelBuffer = await generateExcelWorkbook(
+      "Commission Report",
+      COMMISSION_REPORT_EXPORT_COLUMNS,
+      jsonReport.summary.physiotherapistBreakdown,
+      summary
+    );
+
+    const exportedRows = await readWorksheetRows(excelBuffer, "Commission Report");
+    expect(exportedRows).toHaveLength(jsonReport.summary.physiotherapistBreakdown.length);
+
+    const exportedCommission = exportedRows.reduce((sum: number, row) => sum + Number(row[2]), 0);
+    expect(exportedCommission).toBeCloseTo(jsonReport.summary.totalCommission, 5);
+
+    const summaryRows = await readWorksheetRows(excelBuffer, "Summary");
+    const summaryMap = new Map(summaryRows.map((row) => [row[0], row[1]]));
+    expect(summaryMap.get("Total Completed Appointments")).toBe(jsonReport.summary.totalCompletedAppointments);
+    expect(summaryMap.get("Total Commission")).toBe(jsonReport.summary.totalCommission);
   });
 });

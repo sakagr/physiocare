@@ -202,6 +202,30 @@ export async function countOrganizationPatientPackages(
 }
 
 /**
+ * Lists patient packages by ID, for report aggregation. Not paginated;
+ * callers are expected to have already bounded the ID set. Includes
+ * soft-deleted rows so historical commission calculations remain stable.
+ */
+export async function listPatientPackagesByIds(
+  supabase: SupabaseClient<Database>,
+  patientPackageIds: string[]
+): Promise<PatientPackage[]> {
+  if (patientPackageIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("patient_packages")
+    .select("*")
+    .in("id", patientPackageIds);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Checks whether any invoice still references the given patient package.
  */
 export async function existsInvoiceForPatientPackage(

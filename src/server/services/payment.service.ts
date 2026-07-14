@@ -10,7 +10,7 @@ import {
 } from "../repositories/payment.repository";
 import { findUserById } from "../repositories/user.repository";
 import { findInvoiceById } from "../repositories/invoice.repository";
-import { canManagePayments, canUpdatePaymentStatus, canAccessPayment } from "./authorization.service";
+import { canManagePayments, canUpdatePaymentStatus, canAccessPayment, canOrganizationTransact } from "./authorization.service";
 import { recordAuditLog } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -43,6 +43,11 @@ export async function createPayment(
   const caller = await findUserById(supabase, callerUserId);
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
+  }
+
+  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
+  if (!isTransactable) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
   }
 
   const invoice = await findInvoiceById(supabase, input.invoiceId);

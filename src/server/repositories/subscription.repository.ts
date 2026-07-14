@@ -7,7 +7,7 @@ export type UpdateSubscriptionPlan = Database["public"]["Tables"]["subscription_
 
 /**
  * Finds a subscription plan by its unique name.
- * 
+ *
  * @param supabase - The Supabase client.
  * @param name - The name of the subscription plan.
  * @returns The subscription plan if found, or null.
@@ -20,6 +20,29 @@ export async function findSubscriptionPlanByName(
     .from("subscription_plans")
     .select("*")
     .eq("plan_name", name)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Finds a subscription plan by ID.
+ *
+ * @param supabase - The Supabase client.
+ * @param planId - The ID of the subscription plan.
+ * @returns The subscription plan if found, or null.
+ */
+export async function findSubscriptionPlanById(
+  supabase: SupabaseClient<Database>,
+  planId: string
+): Promise<SubscriptionPlan | null> {
+  const { data, error } = await supabase
+    .from("subscription_plans")
+    .select("*")
+    .eq("id", planId)
     .maybeSingle();
 
   if (error) {

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   findUserById: vi.fn(),
   updateUser: vi.fn(),
   canManageTargetUser: vi.fn(),
+  canOrganizationTransact: vi.fn(),
+  canCreateUserWithinLimit: vi.fn(),
   setUserDisabled: vi.fn(),
   setUserEnabled: vi.fn(),
   ensureUsernameAvailable: vi.fn(),
@@ -37,6 +39,8 @@ vi.mock("@/server/services/authorization.service", () => ({
   canUpdateUserRole: vi.fn(),
   canManageClinics: vi.fn(),
   canAssignUserToClinic: vi.fn(),
+  canOrganizationTransact: mocks.canOrganizationTransact,
+  canCreateUserWithinLimit: mocks.canCreateUserWithinLimit,
 }));
 vi.mock("@/server/repositories/organization.repository", () => ({
   findOrganizationByName: vi.fn(),
@@ -73,6 +77,8 @@ describe("organization command compensation", () => {
     vi.clearAllMocks();
     mocks.findUserById.mockResolvedValue({ id: "target-user", organization_id: "org-id" });
     mocks.canManageTargetUser.mockResolvedValue(true);
+    mocks.canOrganizationTransact.mockResolvedValue(true);
+    mocks.canCreateUserWithinLimit.mockResolvedValue(true);
     mocks.createAuthUser.mockResolvedValue({ id: "auth-user" });
   });
 

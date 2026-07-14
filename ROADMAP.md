@@ -106,15 +106,13 @@ Cross-cutting infrastructure.
 
 ---
 
-# Phase 7 – Reporting & Analytics
+# Phase 7 – Reporting & Analytics ✅
 
 Business intelligence and reporting.
 
-- Implement Dashboard Widgets
 - Implement Billing Reports
 - Implement Physiotherapist Reports
-- Implement Commission Calculations
-- Implement Monthly Commission Reports
+- Implement Dashboard Widgets
 - Implement Excel Export APIs
 - Implement PDF Generation
 
@@ -126,6 +124,8 @@ Domain-specific workflows.
 
 - Implement Appointment Status Tracking
 - Implement Package Session Consumption Logic
+- Implement Commission Calculations
+- Implement Monthly Commission Reports
 - Implement Subscription Enforcement
 - Implement Subscription Renewal Workflow
 - Implement Organization Limits Enforcement

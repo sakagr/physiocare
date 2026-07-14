@@ -106,6 +106,73 @@ export async function existsPaymentForInvoice(
 }
 
 /**
+ * Lists every active payment within an organization whose paid_at falls
+ * within the given range, for report aggregation (a "money moved during
+ * this period" view -- independent of when the underlying invoice was
+ * dated). Clinic scoping goes through the invoice, since payments carry no
+ * clinic_id of their own. Not paginated; callers are expected to have
+ * already bounded the date range. Read-only: exists solely to retrieve
+ * reporting data.
+ */
+export async function listPaymentsForReport(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  filters: {
+    dateFrom: string;
+    dateTo: string;
+    clinicId?: string;
+    clinicIds?: string[];
+  }
+): Promise<(Payment & { invoices: { clinic_id: string } })[]> {
+  let query = supabase
+    .from("payments")
+    .select("*, invoices!inner(clinic_id)")
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .gte("paid_at", filters.dateFrom)
+    .lte("paid_at", filters.dateTo);
+
+  if (filters.clinicId) {
+    query = query.eq("invoices.clinic_id", filters.clinicId);
+  } else if (filters.clinicIds) {
+    query = query.in("invoices.clinic_id", filters.clinicIds);
+  }
+
+  const { data, error } = await query.order("paid_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data as unknown as (Payment & { invoices: { clinic_id: string } })[];
+}
+
+/**
+ * Lists every active payment recorded against the given invoices, with no
+ * date restriction -- used to determine "does this invoice have a payment
+ * at all" for a set of invoices without an N+1 query. Read-only: exists
+ * solely to retrieve reporting data.
+ */
+export async function listPaymentsByInvoiceIds(
+  supabase: SupabaseClient<Database>,
+  invoiceIds: string[]
+): Promise<Payment[]> {
+  if (invoiceIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .in("invoice_id", invoiceIds)
+    .is("deleted_at", null);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Lists a patient's payments by joining through their invoices.
  */
 export async function listPaymentsByPatient(

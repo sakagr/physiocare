@@ -146,6 +146,72 @@ export async function listInvoices(
 }
 
 /**
+ * Lists every active invoice within an organization whose invoice_date falls
+ * within the given range, for report aggregation. Unlike listInvoices, this
+ * is not paginated -- callers are expected to have already bounded the date
+ * range (see MAX_REPORT_RANGE_DAYS) to keep the result set safe. Read-only:
+ * exists solely to retrieve reporting data.
+ */
+export async function listInvoicesForReport(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  filters: {
+    dateFrom: string;
+    dateTo: string;
+    clinicId?: string;
+    clinicIds?: string[];
+  }
+): Promise<Invoice[]> {
+  let query = supabase
+    .from("invoices")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .gte("invoice_date", filters.dateFrom)
+    .lte("invoice_date", filters.dateTo);
+
+  if (filters.clinicId) {
+    query = query.eq("clinic_id", filters.clinicId);
+  } else if (filters.clinicIds) {
+    query = query.in("clinic_id", filters.clinicIds);
+  }
+
+  const { data, error } = await query.order("invoice_date", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Lists every active invoice linked to any of the given appointments, with
+ * no invoice_date restriction -- used to attribute revenue to whichever
+ * physiotherapist owns the appointment, exactly per the appointment_id ->
+ * physiotherapist_id rule (see physiotherapist-report.service.ts), without
+ * an N+1 query. Read-only: exists solely to retrieve reporting data.
+ */
+export async function listInvoicesByAppointmentIds(
+  supabase: SupabaseClient<Database>,
+  appointmentIds: string[]
+): Promise<Invoice[]> {
+  if (appointmentIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*")
+    .in("appointment_id", appointmentIds)
+    .is("deleted_at", null);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Counts active invoices matching filter criteria within an organization.
  */
 export async function countInvoices(

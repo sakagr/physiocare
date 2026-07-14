@@ -102,6 +102,35 @@ export async function existsConsultationForPatient(
 }
 
 /**
+ * Lists every consultation linked to any of the given appointments.
+ * Consultations have no date field of their own that would meaningfully
+ * represent "when in the reporting period this happened" -- created_at is
+ * just record-insert time, not clinical date -- so report aggregation scopes
+ * consultations through the appointment_id of an already date-scoped
+ * appointment set (see physiotherapist-report.service.ts) rather than
+ * filtering consultations directly. Read-only: exists solely to retrieve
+ * reporting data.
+ */
+export async function listConsultationsByAppointmentIds(
+  supabase: SupabaseClient<Database>,
+  appointmentIds: string[]
+): Promise<Consultation[]> {
+  if (appointmentIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("consultations")
+    .select("*")
+    .in("appointment_id", appointmentIds);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Lists consultations within an organization with filter and pagination support.
  * When clinicIds is provided (receptionist scoping), results are restricted
  * to consultations whose appointment belongs to one of those clinics.

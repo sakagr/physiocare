@@ -51,6 +51,10 @@ import * as attendanceCheckoutRoute from "@/app/api/attendance/[id]/checkout/rou
 import * as notificationsRoute from "@/app/api/notifications/route";
 import * as notificationRoute from "@/app/api/notifications/[id]/route";
 import * as auditLogsRoute from "@/app/api/audit-logs/route";
+import * as billingReportRoute from "@/app/api/reports/billing/route";
+import * as physiotherapistReportRoute from "@/app/api/reports/physiotherapists/route";
+import * as billingReportExportRoute from "@/app/api/reports/billing/export/route";
+import * as physiotherapistReportExportRoute from "@/app/api/reports/physiotherapists/export/route";
 
 const request = (method = "GET", body?: unknown) => new NextRequest("http://localhost/api/test", {
   method,
@@ -139,6 +143,10 @@ describe("public API authentication", () => {
     ["notifications list", () => notificationsRoute.GET(request())],
     ["notification detail", () => notificationRoute.GET(request(), context)],
     ["audit logs list", () => auditLogsRoute.GET(request())],
+    ["billing report", () => billingReportRoute.GET(request())],
+    ["physiotherapist report", () => physiotherapistReportRoute.GET(request())],
+    ["billing report export", () => billingReportExportRoute.GET(request())],
+    ["physiotherapist report export", () => physiotherapistReportExportRoute.GET(request())],
   ] as const;
 
   it.each(protectedEndpoints)("returns 401 for unauthenticated %s requests", async (_name, invoke) => {

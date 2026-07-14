@@ -143,6 +143,45 @@ export async function listAppointments(
 }
 
 /**
+ * Lists every active appointment within an organization whose
+ * appointment_time falls within the given range, for report aggregation.
+ * Not paginated; callers are expected to have already bounded the date
+ * range. Read-only: exists solely to retrieve reporting data.
+ */
+export async function listAppointmentsForReport(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  filters: {
+    dateFrom: string;
+    dateTo: string;
+    physiotherapistId?: string;
+    clinicId?: string;
+  }
+): Promise<Appointment[]> {
+  let query = supabase
+    .from("appointments")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .gte("appointment_time", filters.dateFrom)
+    .lte("appointment_time", filters.dateTo);
+
+  if (filters.physiotherapistId) {
+    query = query.eq("physiotherapist_id", filters.physiotherapistId);
+  }
+  if (filters.clinicId) {
+    query = query.eq("clinic_id", filters.clinicId);
+  }
+
+  const { data, error } = await query.order("appointment_time", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Counts active appointments matching filter criteria within an organization.
  */
 export async function countAppointments(

@@ -834,6 +834,29 @@ export async function canAccessPrescription(
 }
 
 /**
+ * Checks if a caller has read access to the billing report (broad gate;
+ * actual clinic/role scoping is applied by billing-report.service.ts,
+ * mirroring listOrganizationInvoices).
+ */
+export async function canViewBillingReports(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return isActiveOrgMember(supabase, callerUserId);
+}
+
+/**
+ * Checks if a caller has read access to the physiotherapist report (broad
+ * gate; actual role/self scoping is applied by physiotherapist-report.service.ts).
+ */
+export async function canViewPhysiotherapistReports(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return isActiveOrgMember(supabase, callerUserId);
+}
+
+/**
  * Checks if a caller is authorized to (hard-scope) delete an appointment.
  * This is an administrative correction path, distinct from the
  * status = 'cancelled' business state; organization scoping is enforced

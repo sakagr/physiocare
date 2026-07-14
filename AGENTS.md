@@ -198,6 +198,12 @@ parseAppointmentRequest()
 
 ---
 
+## Route Transport Helpers
+
+Route transport helpers (authentication wrappers, error mapping, route composition) belong under `src/lib/api/`. Business logic must never be placed here.
+
+---
+
 # Database Types
 
 Each repository should export the generated Supabase table types.
@@ -423,6 +429,8 @@ Repositories should not know about concepts such as:
 Repositories operate on data.
 
 Services implement business decisions.
+
+Business state transitions must be enforced in the Service layer. Database enums and constraints define valid values and structural integrity, but they should not encode workflow state machines unless explicitly required by the architecture.
 
 ---
 

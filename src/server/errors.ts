@@ -20,6 +20,28 @@ export const ErrorCodes = {
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
 
 /**
+ * Maps every error code to the HTTP status it is expected to produce.
+ */
+export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  ORGANIZATION_NAME_ALREADY_EXISTS: 409,
+  EMAIL_ALREADY_EXISTS: 409,
+  USERNAME_ALREADY_EXISTS: 409,
+  PATIENT_HAS_DEPENDENT_RECORDS: 409,
+  CONSULTATION_ALREADY_EXISTS: 409,
+  PACKAGE_NAME_ALREADY_EXISTS: 409,
+  PACKAGE_HAS_ACTIVE_ASSIGNMENTS: 409,
+  PATIENT_PACKAGE_HAS_REFERENCES: 409,
+  INVOICE_ALREADY_FINALIZED: 409,
+  PAYMENT_ALREADY_EXISTS_FOR_INVOICE: 409,
+  PAYMENT_EXCEEDS_INVOICE_TOTAL: 409,
+  INVALID_PAYMENT_STATUS_TRANSITION: 409,
+  ATTENDANCE_ALREADY_RECORDED: 409,
+  ATTENDANCE_CHECK_IN_REQUIRED: 409,
+};
+
+/**
  * Custom application error with structured error codes.
  */
 export class AppError extends Error {

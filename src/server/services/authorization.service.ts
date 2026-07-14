@@ -40,6 +40,48 @@ export function canManageRole(callerRole: AppRole, targetRole: AppRole): boolean
   return manageableRoles.includes(targetRole);
 }
 
+/** Roles authorized for administrative management gates (org-admin tier). */
+const ORG_MANAGEMENT_ROLES: AppRole[] = ["ORG_OWNER", "ORG_ADMIN", "SUPER_ADMIN"];
+
+/** Roles authorized for front-desk-level management gates (org-admin tier plus receptionist). */
+const ORG_FRONT_DESK_ROLES: AppRole[] = [
+  "ORG_OWNER",
+  "ORG_ADMIN",
+  "ORG_RECEPTIONIST",
+  "SUPER_ADMIN",
+];
+
+/**
+ * Resolves the caller's role and checks it against an allowed role set.
+ */
+async function hasAnyRole(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  roles: AppRole[]
+): Promise<boolean> {
+  const caller = await findUserById(supabase, userId);
+  if (!caller) return false;
+  const roleRecord = await findRoleById(supabase, caller.role_id);
+  if (!roleRecord) return false;
+  return roles.includes(roleRecord.name);
+}
+
+/**
+ * Checks whether the caller is an active member of any organization
+ * (or the platform SUPER_ADMIN). Used by broad read-access gates whose
+ * actual scoping is applied by the calling query itself.
+ */
+async function isActiveOrgMember(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<boolean> {
+  const caller = await findUserById(supabase, userId);
+  if (!caller) return false;
+  const roleRecord = await findRoleById(supabase, caller.role_id);
+  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
+  return !!caller.organization_id || isSuperAdmin;
+}
+
 /**
  * Verifies if a user has a specific application role.
  */
@@ -111,13 +153,7 @@ export async function canManageUsers(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-  
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -182,13 +218,7 @@ export async function canManageClinics(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -198,14 +228,8 @@ export async function canViewClinics(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  
   // Any active organization employee or platform super admin can view clinics
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -217,13 +241,7 @@ export async function canViewPackages(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -234,13 +252,7 @@ export async function canManagePackages(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -252,13 +264,7 @@ export async function canViewPatientPackages(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -268,13 +274,7 @@ export async function canManagePatientPackages(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "ORG_RECEPTIONIST" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
 }
 
 /**
@@ -285,11 +285,7 @@ export async function canViewInvoices(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -299,13 +295,7 @@ export async function canManageInvoices(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "ORG_RECEPTIONIST" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
 }
 
 /**
@@ -352,11 +342,7 @@ export async function canViewPayments(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -366,13 +352,7 @@ export async function canManagePayments(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "ORG_RECEPTIONIST" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
 }
 
 /**
@@ -383,13 +363,7 @@ export async function canUpdatePaymentStatus(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -400,13 +374,7 @@ export async function canDeleteInvoice(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -455,11 +423,7 @@ export async function canViewAttendance(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -471,13 +435,7 @@ export async function canManageAttendance(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "ORG_RECEPTIONIST" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
 }
 
 /**
@@ -520,13 +478,7 @@ export async function canManageNotifications(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -536,13 +488,7 @@ export async function canViewAuditLogs(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**
@@ -574,13 +520,7 @@ export async function canViewPatients(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -590,13 +530,7 @@ export async function canManagePatients(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "ORG_RECEPTIONIST" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
 }
 
 /**
@@ -713,11 +647,7 @@ export async function canViewAppointments(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -727,13 +657,7 @@ export async function canManageAppointments(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "ORG_RECEPTIONIST" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_FRONT_DESK_ROLES);
 }
 
 /**
@@ -777,11 +701,7 @@ export async function canViewConsultations(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -850,11 +770,7 @@ export async function canViewPrescriptions(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  const isSuperAdmin = roleRecord?.name === "SUPER_ADMIN";
-  return !!caller.organization_id || isSuperAdmin;
+  return isActiveOrgMember(supabase, callerUserId);
 }
 
 /**
@@ -927,11 +843,5 @@ export async function canDeleteAppointment(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  const roleRecord = await findRoleById(supabase, caller.role_id);
-  if (!roleRecord) return false;
-
-  const roleName = roleRecord.name;
-  return roleName === "ORG_OWNER" || roleName === "ORG_ADMIN" || roleName === "SUPER_ADMIN";
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }

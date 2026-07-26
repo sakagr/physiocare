@@ -191,7 +191,9 @@ export async function findUserWithRoleById(
   if (error) {
     throw error;
   }
-  return data as any;
+  // The embedded `role` is a to-one relation, which the generated types widen
+  // to a nullable object; the foreign key is NOT NULL, so it is always present.
+  return data as (User & { role: Role }) | null;
 }
 
 /**
@@ -241,7 +243,9 @@ export async function listUsers(
     throw error;
   }
 
-  return data as any;
+  // `roles!inner(*)` guarantees a row per user, which the generated types
+  // still widen to a nullable object.
+  return data as (User & { role: Role })[];
 }
 
 /**

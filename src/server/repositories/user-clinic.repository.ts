@@ -161,7 +161,9 @@ export async function listUsersByClinic(
     throw error;
   }
 
-  return data.map((uc: any) => uc.users);
+  // `users!inner(*)` yields one embedded user per assignment row.
+  const assignments = data as unknown as { users: User }[];
+  return assignments.map((assignment) => assignment.users);
 }
 
 /**
@@ -184,5 +186,7 @@ export async function listClinicsByUser(
     throw error;
   }
 
-  return data.map((uc: any) => uc.clinics);
+  // `clinics!inner(*)` yields one embedded clinic per assignment row.
+  const assignments = data as unknown as { clinics: Clinic }[];
+  return assignments.map((assignment) => assignment.clinics);
 }

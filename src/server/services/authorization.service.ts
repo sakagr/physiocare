@@ -988,3 +988,58 @@ export async function canDeleteAppointment(
 ): Promise<boolean> {
   return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
+
+/**
+ * Checks if a caller may open the Appointments oversight destination.
+ * This is the managerial cross-staff/clinic review surface (Owner/Admin) --
+ * distinct from `canManageAppointments` (front desk, includes reception) and
+ * `canViewAppointments` (any member); daily operational appointment access
+ * runs through the dashboard, not this destination.
+ */
+export async function canOverseeAppointments(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+}
+
+/**
+ * Checks if a caller may open the Attendance board destination (managerial
+ * review of staff attendance across the organization). Distinct from
+ * recording attendance, which any member may do for themselves and front
+ * desk may do for others.
+ */
+export async function canOverseeAttendance(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+}
+
+/**
+ * Checks if a caller may open Organization Settings (organization profile).
+ * Owner/Admin tier. The Subscription tab within Settings is further gated by
+ * `canManageSubscription` (Owner only).
+ */
+export async function canManageOrganizationSettings(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+}
+
+/**
+ * Checks if a caller may open the Reports destination. Owner/Admin see all
+ * report tabs; a physiotherapist sees only their own physiotherapist report.
+ * Reception has no reports access. Per-tab and per-row scoping is applied by
+ * the report services themselves.
+ */
+export async function canViewReports(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, [
+    ...ORG_MANAGEMENT_ROLES,
+    "ORG_PHYSIOTHERAPIST",
+  ]);
+}

@@ -6,6 +6,8 @@ Its purpose is to provide visibility into the planned implementation phases and 
 
 Implementation details, architecture, coding conventions, and engineering standards are defined in `AGENTS.md`.
 
+User experience conventions — information architecture, user flows, screen inventory, and interaction/state patterns — are defined in `UX.md`. Frontend (F-phase) implementation plans author their per-module UX spec and reference it.
+
 Individual implementation plans are created separately for each module before development begins.
 
 ---
@@ -26,7 +28,7 @@ Before implementing any module:
 
 ---
 
-# Phase 1 – Foundation ✅
+# Phase R1 – Foundation ✅
 
 Infrastructure and platform setup.
 
@@ -44,7 +46,7 @@ Infrastructure and platform setup.
 
 ---
 
-# Phase 2 – Authentication ✅
+# Phase R2 – Authentication ✅
 
 Authentication and access control.
 
@@ -55,7 +57,7 @@ Authentication and access control.
 
 ---
 
-# Phase 3 – Organization Onboarding ✅
+# Phase R3 – Organization Onboarding ✅
 
 Provisioning a new organization.
 
@@ -67,7 +69,7 @@ Provisioning a new organization.
 
 ---
 
-# Phase 4 – Organization Administration ✅
+# Phase R4 – Organization Administration ✅
 
 Core administration modules.
 
@@ -77,7 +79,7 @@ Core administration modules.
 
 ---
 
-# Phase 5 – Clinical Operations ✅
+# Phase R5 – Clinical Operations ✅
 
 Core business modules.
 
@@ -96,7 +98,7 @@ Core business modules.
 
 ---
 
-# Phase 6 – Shared Platform Features ✅
+# Phase R6 – Shared Platform Features ✅
 
 Cross-cutting infrastructure.
 
@@ -106,7 +108,7 @@ Cross-cutting infrastructure.
 
 ---
 
-# Phase 7 – Reporting & Analytics ✅
+# Phase R7 – Reporting & Analytics ✅
 
 Business intelligence and reporting.
 
@@ -118,7 +120,7 @@ Business intelligence and reporting.
 
 ---
 
-# Phase 8 – Advanced Business Logic ✅
+# Phase R8 – Advanced Business Logic ✅
 
 Domain-specific workflows.
 
@@ -132,7 +134,148 @@ Domain-specific workflows.
 
 ---
 
-# Phase 9 – Operations & Deployment
+# Phase F0 – Foundation ✅
+
+Shared UI groundwork.
+
+- Add Current-User Endpoint (`GET /api/users/me`)
+- Setup Component Library & Design System
+- Setup Theme & Typography
+- Establish Responsive Layout Foundations
+- Establish Accessibility Foundations
+- Build Role-Aware App Shell
+- Setup Platform & Organization Namespaces
+- Build Route Guards (Role Group)
+- Build Current-User Contract
+- Build Typed API Client
+- Build Shared UI Primitives
+
+---
+
+# Phase F1 – Authentication & Session
+
+Entry and identity.
+
+- Build Login Page (Username Login)
+- Build Role-Aware Landing Resolver
+- Setup Invitation Acceptance Flow
+- Setup Password Reset Flow
+- Setup Change Password
+- Handle Unauthorized / Forbidden / Expired States
+
+---
+
+# Phase F2 – Platform API Tooling
+
+SUPER_ADMIN API explorer.
+
+- Generate OpenAPI Spec from Validators
+- Setup OpenAPI Spec Endpoint
+- Build In-App API Explorer
+- Setup Same-Origin Try-It-Out Auth
+- Setup Role / Env Guard
+
+---
+
+# Phase F3 – Org: Users & Clinics
+
+People and locations.
+
+- Build User Management Module
+- Setup Reveal-Once Initial Password
+- Build User Activation & Deactivation
+- Build Role Change
+- Build User Offboarding
+- Build User Compensation View
+- Build Clinic Management Module
+- Build Clinic Activation & Deactivation
+- Build User-Clinic Assignment Module
+
+---
+
+# Phase F4 – Org: Setup & Subscription
+
+Organization control surface.
+
+- Build Organization Profile & Settings
+- Build Subscription Plan Selection
+- Build Subscription Activation & Renewal
+- Build Plan Limits & Usage Display
+- Handle Limit Enforcement States
+
+---
+
+# Phase F5 – Catalog & Packages
+
+Packages and assignments.
+
+- Build Package Management Module
+- Build Package Activation & Deactivation
+- Build Patient Package Assignment
+- Build Package Session Usage View
+
+---
+
+# Phase F6 – Clinical Operations
+
+Day-to-day clinic.
+
+- Build Patient Management Module
+- Build Patient Records Upload
+- Build Appointment Management Module
+- Build Appointment Status Workflow
+- Build Consultation Module
+- Build Prescription Module
+- Build Attendance Module
+
+---
+
+# Phase F7 – Billing
+
+Invoicing and payments.
+
+- Build Invoice Management Module
+- Build Invoice Line Items
+- Build Payment Recording
+- Build Payment Status Updates
+
+---
+
+# Phase F8 – Reporting & Analytics
+
+Dashboards and reports.
+
+- Build Dashboard Widgets
+- Build Billing Report View
+- Build Commission Report View
+- Build Physiotherapist Report View
+- Build Excel & PDF Export Triggers
+
+---
+
+# Phase F9 – Notifications & Audit
+
+Visibility surfaces.
+
+- Build Notification Center
+- Build Audit Log Viewer
+
+---
+
+# Phase F10 – Polish & Release Readiness
+
+Hardening before launch.
+
+- Responsive & Mobile Hardening
+- Accessibility Hardening
+- Empty / Loading / Error States
+- End-to-End Testing
+- Performance & Bundle Budget
+- Feature-boundary ESLint rule (deferred from F0: enforce that cross-feature imports go through each feature's `index.ts` barrel — `AGENTS.md` → Project Structure)
+
+---
+
+# Phase R9 – Operations & Deployment
 
 Operational readiness.
 
@@ -145,7 +288,7 @@ Operational readiness.
 
 ---
 
-# Phase 10 – Testing & Release
+# Phase R10 – Testing & Release
 
 Release validation.
 
@@ -156,7 +299,7 @@ Release validation.
 
 ---
 
-# Phase 11 – Documentation
+# Phase R11 – Documentation
 
 Project documentation.
 

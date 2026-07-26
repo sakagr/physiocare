@@ -74,8 +74,12 @@ export function createRouteHandler<P = Record<string, never>>(handler: RouteHand
  * Composes a route handler with a caller-level authorization capability
  * check. Delegates the decision to the given predicate -- it never compares
  * role names itself.
+ *
+ * Named `with...`, not `use...`: this is a higher-order function that wraps a
+ * request handler, not a React hook. The `use` prefix is reserved by React's
+ * rules of hooks, which is what the previous name violated.
  */
-export function useCapability<P = Record<string, never>>(
+export function withCapability<P = Record<string, never>>(
   capability: (supabase: SupabaseClient<Database>, userId: string) => Promise<boolean>,
   handler: RouteHandler<P>
 ): RouteHandler<P> {

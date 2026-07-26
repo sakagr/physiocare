@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 import * as bootstrapRoute from "@/app/api/organizations/bootstrap/route";
 import * as usersRoute from "@/app/api/users/route";
+import * as meRoute from "@/app/api/users/me/route";
 import * as userRoute from "@/app/api/users/[id]/route";
 import * as activateUserRoute from "@/app/api/users/[id]/activate/route";
 import * as deactivateUserRoute from "@/app/api/users/[id]/deactivate/route";
@@ -73,6 +74,7 @@ describe("public API authentication", () => {
     ["organization bootstrap", () => bootstrapRoute.POST(request("POST", {}))],
     ["users create", () => usersRoute.POST(request("POST", {}))],
     ["users list", () => usersRoute.GET(request())],
+    ["current user", () => meRoute.GET(request())],
     ["user detail", () => userRoute.GET(request(), context)],
     ["user profile update", () => userRoute.PATCH(request("PATCH", {}), context)],
     ["user offboard", () => userRoute.DELETE(request("DELETE"), context)],

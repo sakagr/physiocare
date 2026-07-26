@@ -5,7 +5,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
 const LOGIN_PATH = "/login";
-const DEFAULT_AUTHENTICATED_PATH = "/dashboard";
+/**
+ * The landing resolver, which sends the user to the namespace their role
+ * belongs to. The callback does not decide that itself.
+ */
+const DEFAULT_AUTHENTICATED_PATH = "/";
 const RESET_PASSWORD_PATH = "/reset-password";
 
 function getSafeRedirectPath(path: string | null, fallback: string) {

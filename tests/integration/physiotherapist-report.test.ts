@@ -41,7 +41,9 @@ describeIntegration("Physiotherapist report", () => {
       invoiceDate: "2026-02-10",
     });
 
-    const appointmentB = await createAppointment(ctx.admin, owner.id, {
+    // Appointment for the other physiotherapist, with no invoice attached --
+    // it must not appear in either report.
+    await createAppointment(ctx.admin, owner.id, {
       ...validAppointmentInput({ patientId: patient.id, clinicId: clinic.id, physiotherapistId: physioB.id }),
       appointmentTime: "2026-02-15T09:00:00.000Z",
     });

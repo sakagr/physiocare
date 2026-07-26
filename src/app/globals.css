@@ -1,26 +1,32 @@
-@import "tailwindcss";
+/**
+ * Application-level CSS. Mantine owns the design tokens, resets, and component
+ * styles (see `src/lib/theme.ts`); this file holds only what sits outside a
+ * component — full-height layout and the skip link that opens the app shell's
+ * keyboard path.
+ */
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+}
+
+/*
+ * Skip link: visually hidden until focused, then pinned to the top-left so a
+ * keyboard user can jump past the navigation to the content region.
+ */
+.skip-link {
+  position: absolute;
+  left: var(--mantine-spacing-sm);
+  top: var(--mantine-spacing-sm);
+  z-index: 1000;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  box-shadow: var(--mantine-shadow-md);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
 }

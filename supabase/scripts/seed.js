@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-require('dotenv').config({path: '.env.local'});
+const target = process.env.NODE_ENV === 'production' ? 'production' : 'local'
+const envFile = `.env.${target}`
+require('dotenv').config({path: envFile});
 const { readdirSync, readFileSync } = require('fs')
 const path = require('path')
 const postgres = require('postgres')
-console.log(process.env.DATABASE_URL)
+console.log(`Seeding ${target} database (${envFile})`)
 const sql = postgres(process.env.DATABASE_URL)
 async function run() {
     const seedsDir = path.join(process.cwd(), 'supabase', 'seeds')

@@ -10,7 +10,7 @@ import { describeIntegration, setupIntegrationContext } from "../helpers/integra
 describeIntegration("Payment lifecycle", () => {
   const ctx = setupIntegrationContext("payments");
 
-  async function setupInvoice(suffix: string, ownerId: string, organizationId: string) {
+  async function setupInvoice(suffix: string, ownerId: string) {
     const clinic = await createClinic(ctx.admin, ownerId, validClinicInput(`${ctx.runId}-${suffix}`));
     const patient = await createPatient(ctx.admin, ownerId, validPatientInput(`${ctx.runId}-${suffix}`));
     const { invoice } = await createInvoice(ctx.admin, ownerId, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
@@ -20,7 +20,7 @@ describeIntegration("Payment lifecycle", () => {
   it("records a single payment per invoice and rejects a second attempt", async () => {
     const organization = await ctx.createOrganization(`${ctx.runId}-org`);
     const owner = await ctx.createUser(organization.id, "ORG_OWNER", "owner");
-    const invoice = await setupInvoice("one", owner.id, organization.id);
+    const invoice = await setupInvoice("one", owner.id);
 
     const payment = await createPayment(ctx.admin, owner.id, validPaymentInput(invoice.id));
     expect(payment).toMatchObject({ invoice_id: invoice.id, amount: 590, payment_status: "completed" });
@@ -31,7 +31,7 @@ describeIntegration("Payment lifecycle", () => {
   it("rejects a payment amount exceeding the invoice total", async () => {
     const organization = await ctx.createOrganization(`${ctx.runId}-over-org`);
     const owner = await ctx.createUser(organization.id, "ORG_OWNER", "over-owner");
-    const invoice = await setupInvoice("over", owner.id, organization.id);
+    const invoice = await setupInvoice("over", owner.id);
 
     await expect(createPayment(ctx.admin, owner.id, { ...validPaymentInput(invoice.id), amount: 999999 })).rejects.toMatchObject({ code: ErrorCodes.PAYMENT_EXCEEDS_INVOICE_TOTAL });
   });
@@ -39,7 +39,7 @@ describeIntegration("Payment lifecycle", () => {
   it("allows completed -> refunded but rejects reversing a refund", async () => {
     const organization = await ctx.createOrganization(`${ctx.runId}-refund-org`);
     const owner = await ctx.createUser(organization.id, "ORG_OWNER", "refund-owner");
-    const invoice = await setupInvoice("refund", owner.id, organization.id);
+    const invoice = await setupInvoice("refund", owner.id);
     const payment = await createPayment(ctx.admin, owner.id, validPaymentInput(invoice.id));
 
     const refunded = await updatePaymentStatus(ctx.admin, owner.id, payment.id, "refunded");

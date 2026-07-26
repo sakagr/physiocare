@@ -7,6 +7,7 @@ import { AppError, ErrorCodes } from "@/server/errors";
 import { sharedListQuerySchema } from "@/server/validators/shared.validator";
 import { listOrganizationUsers } from "@/server/services/user.service";
 import { createRouteHandler } from "@/lib/api/route-handler";
+import type { AppRole } from "@/server/repositories/user.repository";
 
 export const POST = createRouteHandler(async (request, { supabase, user }) => {
   const body = await request.json();
@@ -39,9 +40,13 @@ export const GET = createRouteHandler(async (request: NextRequest, { supabase, u
     isActive: rawIsActive === null ? undefined : rawIsActive,
   });
 
+  // Transport normalization belongs in the route, not the validator: an absent
+  // or empty `role` means "no role filter". An unrecognized value is passed
+  // through as-is and simply matches no rows, which is the existing behavior.
   const filters = {
     ...parsedFilters,
-    role: rawRole as any,
+    role:
+      rawRole === null || rawRole === "" ? undefined : (rawRole as AppRole),
   };
 
   const result = await listOrganizationUsers(supabase, user.id, filters);

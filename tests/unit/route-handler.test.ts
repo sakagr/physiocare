@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-import { createRouteHandler, mapErrorToResponse, useCapability } from "@/lib/api/route-handler";
+import { createRouteHandler, mapErrorToResponse, withCapability } from "@/lib/api/route-handler";
 
 const request = () => new NextRequest("http://localhost/api/test");
 
@@ -120,11 +120,11 @@ describe("createRouteHandler", () => {
   });
 });
 
-describe("useCapability", () => {
+describe("withCapability", () => {
   it("calls the handler when the capability check passes", async () => {
     const capability = vi.fn(async () => true);
     const handler = vi.fn(async () => NextResponse.json({ ok: true }, { status: 200 }));
-    const guarded = useCapability(capability, handler);
+    const guarded = withCapability(capability, handler);
 
     const supabase = {} as never;
     const response = await guarded(request(), { supabase, user: { id: "user-1" } as never, params: {} });
@@ -137,7 +137,7 @@ describe("useCapability", () => {
   it("throws a FORBIDDEN AppError without calling the handler when the capability check fails", async () => {
     const capability = vi.fn(async () => false);
     const handler = vi.fn();
-    const guarded = useCapability(capability, handler);
+    const guarded = withCapability(capability, handler);
 
     await expect(
       guarded(request(), { supabase: {} as never, user: { id: "user-1" } as never, params: {} })

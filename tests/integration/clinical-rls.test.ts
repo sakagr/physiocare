@@ -107,7 +107,9 @@ describeIntegration("Clinical RLS and tenant isolation", () => {
     const consultationOne = await createConsultation(ctx.admin, physioOne.id, validConsultationInput(appointmentOne.id));
     const consultationTwo = await createConsultation(ctx.admin, physioTwo.id, validConsultationInput(appointmentTwo.id));
     const prescriptionOne = await createPrescription(ctx.admin, physioOne.id, validPrescriptionInput(consultationOne.id));
-    const prescriptionTwo = await createPrescription(ctx.admin, physioTwo.id, validPrescriptionInput(consultationTwo.id));
+    // The other physiotherapist's prescription must exist for the assertion
+    // below to prove it is filtered out rather than simply absent.
+    await createPrescription(ctx.admin, physioTwo.id, validPrescriptionInput(consultationTwo.id));
 
     const physioOneClient = await ctx.signedInClient(physioOne.email);
     const { data: physioAppointments } = await physioOneClient.from("appointments").select("id");

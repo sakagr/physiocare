@@ -2,25 +2,21 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/types/database";
+import {
+  isAuthCallback,
+  isAuthRoute,
+  isProtectedRoute,
+} from "@/lib/auth/route-matchers";
 
 const LOGIN_PATH = "/login";
-const DEFAULT_AUTHENTICATED_PATH = "/dashboard";
 
-/** Routes that require a signed-in user. */
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/app",
-  "/settings",
-  "/patients",
-  "/appointments",
-  "/clinics",
-  "/organizations",
-];
-
-/** Auth UI — signed-in users are redirected to the app home. */
-const AUTH_ROUTES = ["/login", "/reset-password"];
-
-const AUTH_CALLBACK_PREFIX = "/auth";
+/**
+ * Signed-in users hitting the front door go to the landing resolver, not to a
+ * fixed path — it decides the namespace from the user's role. The proxy
+ * performs optimistic session redirects only; the route-group layout guard is
+ * the actual authorization gate.
+ */
+const LANDING_PATH = "/";
 
 function getSupabaseEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,24 +29,6 @@ function getSupabaseEnv() {
   }
 
   return { url, key };
-}
-
-function matchesRoute(pathname: string, routes: string[]) {
-  return routes.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`),
-  );
-}
-
-function isAuthRoute(pathname: string) {
-  return matchesRoute(pathname, AUTH_ROUTES);
-}
-
-function isAuthCallback(pathname: string) {
-  return pathname === AUTH_CALLBACK_PREFIX || pathname.startsWith(`${AUTH_CALLBACK_PREFIX}/`);
-}
-
-function isProtectedRoute(pathname: string) {
-  return matchesRoute(pathname, PROTECTED_PREFIXES);
 }
 
 /** Preserve refreshed session cookies when returning a new response. */
@@ -103,7 +81,7 @@ export async function proxy(request: NextRequest) {
 
   if (user && isAuthRoute(pathname)) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = DEFAULT_AUTHENTICATED_PATH;
+    redirectUrl.pathname = LANDING_PATH;
     redirectUrl.search = "";
     return withSessionCookies(
       response,

@@ -9,10 +9,10 @@
 -- a command -- simpler and equivalent), and fix the stale select_policy role
 -- name + missing ORG_OWNER while we're touching this table.
 --
--- The set_audit_logs_updated_at trigger creation in 3000_triggers.sql is
--- removed in the same change (that file sorts after this one in this repo's
--- migration ordering, so leaving it there would silently recreate a trigger
--- referencing a column that no longer exists).
+-- 2100_triggers.sql (formerly 3000_triggers.sql, renamed so its version
+-- prefix sorts before the timestamped migrations instead of after all of
+-- them) intentionally has no set_audit_logs_updated_at trigger: adding one
+-- would reference the updated_at column dropped below.
 
 alter table public.audit_logs drop column deleted_at;
 alter table public.audit_logs drop column updated_at;

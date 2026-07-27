@@ -35,6 +35,39 @@ describeIntegration("Organization bootstrap", () => {
     expect(plan.plan_name).toBe("NO_SUBSCRIPTION");
   });
 
+  it("points the owner's invitation at the set-password screen", async () => {
+    const input = validOrganizationInput(`${ctx.runId.slice(-6)}-inv`);
+    input.organizationName = `${input.organizationName} ${ctx.runId} invite`;
+    input.adminEmail = `${ctx.runId}-invite@example.test`;
+    input.adminUsername = `${ctx.runId}-invite-owner`.slice(0, 50);
+
+    // The admin client is wrapped so the invitation's redirect target can be
+    // observed: without one, an invited owner would land in the app with no
+    // password ever collected.
+    let redirectTo: string | undefined;
+    const recordingAdmin = {
+      ...ctx.admin,
+      auth: {
+        ...ctx.admin.auth,
+        admin: {
+          ...ctx.admin.auth.admin,
+          inviteUserByEmail: async (email: string, options?: { redirectTo?: string }) => {
+            redirectTo = options?.redirectTo;
+            return ctx.admin.auth.admin.inviteUserByEmail(email, options);
+          },
+        },
+      },
+    } as typeof ctx.admin;
+
+    const result = await bootstrapOrganization(ctx.admin, recordingAdmin, input);
+    ctx.trackOrganization(result.organizationId);
+    ctx.trackUser(result.adminUserId);
+
+    expect(redirectTo).toBe(
+      `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=%2Finvite`
+    );
+  });
+
   it("rejects duplicate organization names before creating another Auth identity", async () => {
     const existing = await ctx.createOrganization(`${ctx.runId}-duplicate-organization`);
     const input = validOrganizationInput("duplicate");

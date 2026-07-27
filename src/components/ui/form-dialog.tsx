@@ -34,6 +34,13 @@ export interface FormDialogProps {
   isDirty?: boolean;
   isSubmitting?: boolean;
   size?: MantineSize;
+  /**
+   * Whether the user may leave without completing the form. `false` removes
+   * every dismissal affordance, for the rare surface that must block the app
+   * until it is satisfied (a forced password change). Dismissible by default:
+   * a form the user cannot escape is the exception, not the norm.
+   */
+  dismissible?: boolean;
   children: React.ReactNode;
 }
 
@@ -47,6 +54,7 @@ export function FormDialog({
   isDirty = false,
   isSubmitting = false,
   size = "md",
+  dismissible = true,
   children,
 }: FormDialogProps) {
   const [discardPromptOpen, setDiscardPromptOpen] = useState(false);
@@ -70,6 +78,9 @@ export function FormDialog({
 
   /** Every dismissal path funnels through here so none of them skips the guard. */
   function requestClose() {
+    if (!dismissible) {
+      return;
+    }
     if (isDirty && !isSubmitting) {
       setDiscardPromptOpen(true);
       return;
@@ -84,7 +95,15 @@ export function FormDialog({
 
   return (
     <>
-      <Modal opened={opened} onClose={requestClose} title={title} size={size}>
+      <Modal
+        opened={opened}
+        onClose={requestClose}
+        title={title}
+        size={size}
+        withCloseButton={dismissible}
+        closeOnClickOutside={dismissible}
+        closeOnEscape={dismissible}
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -95,13 +114,15 @@ export function FormDialog({
             <Stack gap="md">{children}</Stack>
 
             <Group justify="flex-end" gap="sm">
-              <Button
-                variant="default"
-                onClick={requestClose}
-                disabled={isSubmitting}
-              >
-                {cancelLabel}
-              </Button>
+              {dismissible ? (
+                <Button
+                  variant="default"
+                  onClick={requestClose}
+                  disabled={isSubmitting}
+                >
+                  {cancelLabel}
+                </Button>
+              ) : null}
               <Button type="submit" loading={isSubmitting}>
                 {submitLabel}
               </Button>

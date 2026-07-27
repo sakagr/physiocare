@@ -7,6 +7,11 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+vi.mock("@/lib/supabase/route", () => ({
+  createRouteClient: vi.fn(async () => ({
+    auth: { signOut: async () => ({ error: null }) },
+  })),
+}));
 
 import * as bootstrapRoute from "@/app/api/organizations/bootstrap/route";
 import * as usersRoute from "@/app/api/users/route";
@@ -56,6 +61,11 @@ import * as billingReportRoute from "@/app/api/reports/billing/route";
 import * as physiotherapistReportRoute from "@/app/api/reports/physiotherapists/route";
 import * as billingReportExportRoute from "@/app/api/reports/billing/export/route";
 import * as physiotherapistReportExportRoute from "@/app/api/reports/physiotherapists/export/route";
+import * as loginRoute from "@/app/api/auth/login/route";
+import * as logoutRoute from "@/app/api/auth/logout/route";
+import * as requestPasswordResetRoute from "@/app/api/auth/request-password-reset/route";
+import * as setPasswordRoute from "@/app/api/auth/set-password/route";
+import * as changePasswordRoute from "@/app/api/auth/change-password/route";
 
 const request = (method = "GET", body?: unknown) => new NextRequest("http://localhost/api/test", {
   method,
@@ -149,6 +159,8 @@ describe("public API authentication", () => {
     ["physiotherapist report", () => physiotherapistReportRoute.GET(request())],
     ["billing report export", () => billingReportExportRoute.GET(request())],
     ["physiotherapist report export", () => physiotherapistReportExportRoute.GET(request())],
+    ["auth set password", () => setPasswordRoute.POST(request("POST", {}))],
+    ["auth change password", () => changePasswordRoute.POST(request("POST", {}))],
   ] as const;
 
   it.each(protectedEndpoints)("returns 401 for unauthenticated %s requests", async (_name, invoke) => {
@@ -156,5 +168,27 @@ describe("public API authentication", () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+});
+
+describe("public authentication endpoints", () => {
+  it("does not gate sign-in behind a session", async () => {
+    // A malformed body must fail validation, not authentication -- a 401 here
+    // would mean the front door demands the session it exists to create.
+    const response = await loginRoute.POST(request("POST", {}));
+
+    expect(response.status).toBe(400);
+  });
+
+  it("does not gate a reset request behind a session", async () => {
+    const response = await requestPasswordResetRoute.POST(request("POST", {}));
+
+    expect(response.status).toBe(400);
+  });
+
+  it("signs out idempotently when there is no session", async () => {
+    const response = await logoutRoute.POST(request("POST"));
+
+    expect(response.status).toBe(204);
   });
 });

@@ -50,9 +50,11 @@ The routable structure, by route group. Only **destinations** appear as nodes (p
 ```
 /login                       Login
 /reset-password              Reset Password — Request
-/reset-password/[token]      Reset Password — Confirm
-/invite/[token]              Invitation Acceptance
+/reset-password/confirm      Reset Password — Confirm
+/invite                      Invitation Acceptance
 ```
+
+The confirm screens carry no token in their path. `/auth/callback` exchanges the emailed token for a session before redirecting, so by the time the user arrives they are already signed in on a short-lived recovery or invitation session; repeating the token in the URL would add referrer and history exposure for nothing. What authorizes setting a password without the current one is the **password-setup ticket** issued by the callback (`AGENTS.md` → ADR-0007), and its absence is what an expired or already-used link looks like on these screens.
 
 Non-navigable frames: Forbidden / Unauthorized, Session Expired. Technical: `/auth/callback`, landing resolver (post-auth redirect into the correct namespace).
 
@@ -129,7 +131,7 @@ A landing resolver runs after authentication (it is not a screen) and routes the
 - **Organization roles** (Owner, Admin, Physio, Reception) → `/app` (Dashboard). The Dashboard is role-aware, so it is the single landing target for all org users.
 - **Wrong namespace** → the route-group layout guard bounces the user to their own namespace (or a Forbidden frame); enforcement is at the layout, not per page.
 - **Forced password change** (future — see the change-password dialog note) → intercepts before landing; the user completes the non-dismissible dialog, then resolves normally.
-- **After invitation acceptance** → the invited user signs in at `/login` and resolves per role.
+- **After invitation acceptance or a password reset** → the user already holds the session the emailed link created, so once their password is set they resolve per role on that session. They are not sent back to `/login`: a second sign-in would add a step without adding proof.
 
 Gating continues inside a destination, not just at its entrance: actions a user cannot perform are hidden or disabled rather than shown and then failing, even on destinations they can otherwise reach.
 
@@ -167,7 +169,7 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
 - **Steps:**
   1. System validates the invitation and prompts the user to set a password.
   2. User sets it; system activates the account.
-  3. User signs in and lands per role (Flow 1).
+  3. The user lands per role on the session the invitation created (Flow 1).
 - **End states:** *Success* — active account on the Dashboard. *Failure* — invalid/expired invitation → guidance to request a new invite.
 
 ## Clinical & billing
@@ -318,12 +320,14 @@ Role-agnostic entry. No shell; standalone centered layout. Auth flows are full-s
 | --- | --- | --- | --- | --- | --- |
 | Login | Username + password sign-in; single front door for all roles | All + SA | `/login` | `auth` | F1 |
 | Reset Password — Request | Request a reset link by identifier | All + SA | `/reset-password` | `auth` | F1 |
-| Reset Password — Confirm | Set a new password from a reset token | All + SA | `/reset-password/[token]` | `auth` | F1 |
-| Invitation Acceptance | Invited user sets their initial password and activates their account | All | `/invite/[token]` | `auth` | F1 |
+| Reset Password — Confirm | Set a new password on the session the reset link created | All + SA | `/reset-password/confirm` | `auth` | F1 |
+| Invitation Acceptance | Invited user sets their initial password and activates their account | All | `/invite` | `auth` | F1 |
 
 Non-destination frames: **Forbidden / Unauthorized** (403 / wrong-namespace) and **Session Expired** (401) render as in-shell frames or standalone fallbacks, not navigable pages. Technical, non-screen endpoints: `/auth/callback` (session handoff) and the landing resolver (post-auth redirect).
 
 Self-service reset (request + confirm) applies only to roles with a real email — Owner, Admin, and platform users. Physiotherapists and Receptionists, whose email may be a placeholder, are reset by an Owner/Admin via a reveal-once temporary password (a Users action, F3); see Flow 2 and Flow 9.
+
+That distinction is **UI steering, not a backend rule**. The request-reset endpoint is uniform for every role and always answers generically ("if an account exists, we've sent a link"), because deciding whether to block a role would mean disclosing something about the account to the caller. The Physio/Reception guidance lives as copy on the request screen.
 
 ## Platform Console — `(platform)/platform/…`
 

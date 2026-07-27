@@ -3,6 +3,7 @@ import {
   isAuthCallback,
   isAuthRoute,
   isProtectedRoute,
+  isSessionRequiredAuthRoute,
 } from "@/lib/auth/route-matchers";
 
 /**
@@ -36,11 +37,31 @@ describe("isAuthRoute", () => {
   it("matches the front-door destinations", () => {
     expect(isAuthRoute("/login")).toBe(true);
     expect(isAuthRoute("/reset-password")).toBe(true);
-    expect(isAuthRoute("/reset-password/token-123")).toBe(true);
   });
 
   it("does not match application routes", () => {
     expect(isAuthRoute("/app")).toBe(false);
+  });
+
+  it("excludes the set-password screens", () => {
+    // They are reached *with* a recovery/invite session. Bouncing a signed-in
+    // user off them would drop an invited user into the app before they ever
+    // set a password.
+    expect(isAuthRoute("/reset-password/confirm")).toBe(false);
+    expect(isAuthRoute("/invite")).toBe(false);
+  });
+});
+
+describe("isSessionRequiredAuthRoute", () => {
+  it("matches the screens reached from a recovery or invite link", () => {
+    expect(isSessionRequiredAuthRoute("/reset-password/confirm")).toBe(true);
+    expect(isSessionRequiredAuthRoute("/invite")).toBe(true);
+  });
+
+  it("does not match the front door or the namespaces", () => {
+    for (const pathname of ["/login", "/reset-password", "/app", "/platform", "/"]) {
+      expect(isSessionRequiredAuthRoute(pathname)).toBe(false);
+    }
   });
 });
 

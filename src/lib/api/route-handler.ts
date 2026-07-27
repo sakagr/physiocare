@@ -70,6 +70,34 @@ export function createRouteHandler<P = Record<string, never>>(handler: RouteHand
   };
 }
 
+export type PublicRouteHandler<P = Record<string, never>> = (
+  request: NextRequest,
+  ctx: { params: P }
+) => Promise<NextResponse>;
+
+/**
+ * Wraps a route handler that must be reachable without a session -- sign-in,
+ * sign-out, and requesting a password reset -- with the same error-to-response
+ * mapping every other route uses. It is the authentication gate that is
+ * dropped here, nothing else: validation and authorization remain the
+ * handler's own responsibility.
+ */
+export function createPublicRouteHandler<P = Record<string, never>>(
+  handler: PublicRouteHandler<P>
+) {
+  return async (
+    request: NextRequest,
+    routeCtx?: { params: Promise<P> }
+  ): Promise<NextResponse> => {
+    try {
+      const params = routeCtx ? await routeCtx.params : ({} as P);
+      return await handler(request, { params });
+    } catch (error) {
+      return mapErrorToResponse(error);
+    }
+  };
+}
+
 /**
  * Composes a route handler with a caller-level authorization capability
  * check. Delegates the decision to the given predicate -- it never compares

@@ -17,7 +17,8 @@ import {
   IconLogout,
   IconUser,
 } from "@tabler/icons-react";
-import { createClient } from "@/lib/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChangePasswordDialog, MyAccountDialog, logout } from "@/features/auth";
 import { useCurrentUser } from "@/lib/auth/current-user-context";
 import { ClinicSwitcher } from "./clinic-switcher";
 
@@ -33,14 +34,23 @@ import { ClinicSwitcher } from "./clinic-switcher";
 export function UserMenu({ initialClinicId }: { initialClinicId?: string | null }) {
   const user = useCurrentUser();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [signingOut, setSigningOut] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   async function handleLogout() {
     setSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    try {
+      await logout();
+    } finally {
+      // Whatever the route answered, this browser is done with the session:
+      // drop the cached server state so the next user of this machine never
+      // sees the previous one's data.
+      queryClient.clear();
+      router.push("/login");
+      router.refresh();
+    }
   }
 
   const initials = user.fullName
@@ -51,6 +61,7 @@ export function UserMenu({ initialClinicId }: { initialClinicId?: string | null 
     .toUpperCase();
 
   return (
+    <>
     <Menu position="bottom-end" width={260} closeOnItemClick>
       <Menu.Target>
         <UnstyledButton aria-label="Open user menu">
@@ -99,11 +110,16 @@ export function UserMenu({ initialClinicId }: { initialClinicId?: string | null 
         )}
 
         <Divider />
-        {/* Account surfaces are F1 destinations; shown but inert until then. */}
-        <Menu.Item leftSection={<IconUser size={16} stroke={1.5} />} disabled>
+        <Menu.Item
+          leftSection={<IconUser size={16} stroke={1.5} />}
+          onClick={() => setAccountOpen(true)}
+        >
           My account
         </Menu.Item>
-        <Menu.Item leftSection={<IconLock size={16} stroke={1.5} />} disabled>
+        <Menu.Item
+          leftSection={<IconLock size={16} stroke={1.5} />}
+          onClick={() => setChangePasswordOpen(true)}
+        >
           Change password
         </Menu.Item>
 
@@ -117,5 +133,20 @@ export function UserMenu({ initialClinicId }: { initialClinicId?: string | null 
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>
+
+    <MyAccountDialog
+      opened={accountOpen}
+      onClose={() => setAccountOpen(false)}
+      onChangePassword={() => {
+        setAccountOpen(false);
+        setChangePasswordOpen(true);
+      }}
+    />
+
+    <ChangePasswordDialog
+      opened={changePasswordOpen}
+      onClose={() => setChangePasswordOpen(false)}
+    />
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError, TransportErrorCodes } from "@/lib/api/api-error";
 import {
+  buildLoginRedirect,
   resolveQueryErrorAction,
   shouldRetryQuery,
 } from "@/lib/query/error-policy";
@@ -77,10 +78,44 @@ describe("resolveQueryErrorAction", () => {
     expect(resolveQueryErrorAction(new ApiError("Bad", 400, null)).type).toBe("none");
   });
 
+  it("presents a failed sign-in on the form rather than bouncing to it", () => {
+    // A wrong password is also a 401. Treating it as an expired session would
+    // send the user to the page they are already on, with the wrong reason.
+    const action = resolveQueryErrorAction(
+      new ApiError("Wrong credentials", 401, "INVALID_CREDENTIALS")
+    );
+
+    expect(action.type).toBe("none");
+  });
+
   it("toasts an unexpected non-ApiError failure", () => {
     const action = resolveQueryErrorAction(new Error("kaboom"));
 
     expect(action.type).toBe("toast");
     expect(action.message).toBe("Something went wrong. Please try again.");
+  });
+});
+
+describe("buildLoginRedirect", () => {
+  it("preserves where the user was so they can resume after re-auth", () => {
+    expect(buildLoginRedirect("/app/invoices?page=2")).toBe(
+      "/login?reason=expired&next=%2Fapp%2Finvoices%3Fpage%3D2"
+    );
+  });
+
+  it("says why the user is back at the front door", () => {
+    expect(buildLoginRedirect("/app")).toContain("reason=expired");
+  });
+
+  it("never sends the user to another site", () => {
+    expect(buildLoginRedirect("//evil.example.com")).toBe("/login?reason=expired");
+    expect(buildLoginRedirect("https://evil.example.com")).toBe(
+      "/login?reason=expired"
+    );
+  });
+
+  it("does not loop the login page back to itself", () => {
+    expect(buildLoginRedirect("/login")).toBe("/login?reason=expired");
+    expect(buildLoginRedirect("/login?next=%2Fapp")).toBe("/login?reason=expired");
   });
 });

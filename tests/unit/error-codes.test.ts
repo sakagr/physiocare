@@ -30,6 +30,42 @@ describe("error-code behavior map", () => {
     expect(behavior.behavior).toBe("redirectLogin");
   });
 
+  it("routes a codeless 401 to a login redirect", () => {
+    expect(resolveErrorBehavior(new ApiError("Unauthorized", 401)).behavior).toBe(
+      "redirectLogin"
+    );
+  });
+
+  it("presents a failed sign-in inline rather than as an expired session", () => {
+    // A bad password is also a 401. Consulting the code map first is what stops
+    // it presenting as "your session expired" (AGENTS.md → Error Handling).
+    const behavior = resolveErrorBehavior(
+      new ApiError("Wrong credentials", 401, ErrorCodes.INVALID_CREDENTIALS)
+    );
+    expect(behavior.behavior).toBe("inline");
+  });
+
+  it("presents an expired password-setup link inline", () => {
+    const behavior = resolveErrorBehavior(
+      new ApiError("Expired", 401, ErrorCodes.PASSWORD_SETUP_SESSION_INVALID)
+    );
+    expect(behavior.behavior).toBe("inline");
+  });
+
+  it("maps a wrong current password onto the form rather than to sign-in", () => {
+    const behavior = resolveErrorBehavior(
+      new ApiError("Wrong password", 400, ErrorCodes.INVALID_CURRENT_PASSWORD)
+    );
+    expect(behavior.behavior).toBe("inline");
+  });
+
+  it("presents an inactive account inline on the sign-in form", () => {
+    const behavior = resolveErrorBehavior(
+      new ApiError("Inactive", 403, ErrorCodes.ACCOUNT_INACTIVE)
+    );
+    expect(behavior.behavior).toBe("inline");
+  });
+
   it("routes a network failure to a retry toast", () => {
     const behavior = resolveErrorBehavior(
       new ApiError("Network request failed", 0, TransportErrorCodes.NETWORK)

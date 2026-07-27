@@ -1,7 +1,11 @@
 import { cache } from "react";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { resolveQueryErrorAction, shouldRetryQuery } from "./error-policy";
+import {
+  buildLoginRedirect,
+  resolveQueryErrorAction,
+  shouldRetryQuery,
+} from "./error-policy";
 
 /**
  * TanStack Query is the server-state manager (AGENTS.md → Rendering and
@@ -26,7 +30,11 @@ function dispatchErrorAction(error: unknown): void {
 
   if (action.type === "redirectLogin") {
     if (typeof window !== "undefined") {
-      window.location.assign("/login");
+      // Carries the reason and the return path, so the user is told why they
+      // are signing in again and lands back where they were.
+      window.location.assign(
+        buildLoginRedirect(`${window.location.pathname}${window.location.search}`)
+      );
     }
     return;
   }

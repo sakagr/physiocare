@@ -125,6 +125,22 @@ export const ERROR_BEHAVIORS: Record<ErrorCode, ErrorBehaviorEntry> = {
     behavior: "toast",
     message: "That subscription change isn't allowed.",
   },
+  INVALID_CREDENTIALS: {
+    behavior: "inline",
+    message: "We couldn't sign you in. Check your username and password.",
+  },
+  ACCOUNT_INACTIVE: {
+    behavior: "inline",
+    message: "This account is no longer active. Contact your administrator.",
+  },
+  INVALID_CURRENT_PASSWORD: {
+    behavior: "inline",
+    message: "That current password isn't right.",
+  },
+  PASSWORD_SETUP_SESSION_INVALID: {
+    behavior: "inline",
+    message: "This link has expired. Request a new one to set your password.",
+  },
 };
 
 /** Fallback when a code is unknown or absent (transport-only failures). */
@@ -153,14 +169,18 @@ export function resolveErrorBehavior(error: ApiError): ErrorBehaviorEntry {
   if (error.isNetworkError || error.code === TransportErrorCodes.NETWORK) {
     return NETWORK_ENTRY;
   }
+  // The code map is consulted *before* the bare-401 shortcut. A failed sign-in
+  // and an expired password-setup link are both 401s that carry a code, and
+  // presenting either as "your session expired" would be actively misleading.
+  // Only a codeless 401 means the session itself is gone.
+  if (error.code && error.code in ERROR_BEHAVIORS) {
+    return ERROR_BEHAVIORS[error.code as ErrorCode];
+  }
   if (
     error.status === 401 ||
     error.code === TransportErrorCodes.UNAUTHENTICATED
   ) {
     return UNAUTHENTICATED_ENTRY;
-  }
-  if (error.code && error.code in ERROR_BEHAVIORS) {
-    return ERROR_BEHAVIORS[error.code as ErrorCode];
   }
   // Transport-level validation errors carry field details but no app code.
   if (error.status === 400) {

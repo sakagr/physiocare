@@ -79,6 +79,9 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  // Session-required front-door screens (`/reset-password/confirm`,
+  // `/invite`) match neither classification, so they fall through untouched
+  // in both directions -- their own page guard decides what to render.
   if (user && isAuthRoute(pathname)) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = LANDING_PATH;

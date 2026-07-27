@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { UserMenu } from "@/components/shell/user-menu";
-import { renderWithProviders, screen } from "../helpers/render";
+import { renderWithProviders, screen, waitFor } from "../helpers/render";
 import { currentUserFixtures } from "../helpers/current-user";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
-const signOut = vi.hoisted(() => vi.fn().mockResolvedValue({ error: null }));
+const post = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
   usePathname: () => "/app",
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { signOut } }),
+vi.mock("@/lib/api/client", () => ({
+  api: { post: (...args: unknown[]) => post(...args) },
 }));
 
 /**
@@ -78,13 +78,38 @@ describe("UserMenu", () => {
     expect(screen.queryByRole("combobox", { name: "Clinic" })).toBeNull();
   });
 
-  it("signs the user out and returns them to the front door", async () => {
+  it("opens the account surfaces the menu offers", async () => {
+    renderWithProviders(<UserMenu />);
+    const user = await openMenu();
+
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
+
+    expect(screen.getByRole("heading", { name: "My account" })).toBeInTheDocument();
+    // Identity comes from the current-user contract the shell already holds.
+    expect(screen.getByText("test.user@example.test")).toBeInTheDocument();
+  });
+
+  it("raises the change-password dialog from the menu", async () => {
+    renderWithProviders(<UserMenu />);
+    const user = await openMenu();
+
+    await user.click(screen.getByRole("menuitem", { name: "Change password" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Change password" })
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Current password")).toBeInTheDocument();
+  });
+
+  it("signs the user out through the API and returns them to the front door", async () => {
     renderWithProviders(<UserMenu />);
     const user = await openMenu();
 
     await user.click(screen.getByRole("menuitem", { name: "Log out" }));
 
-    expect(signOut).toHaveBeenCalled();
+    // Through `/api`, not straight to Supabase: the route clears the session
+    // cookies the server set (AGENTS.md → Backend Communication).
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/api/auth/logout"));
     expect(router.push).toHaveBeenCalledWith("/login");
   });
 });

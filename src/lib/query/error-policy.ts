@@ -22,6 +22,26 @@ export type QueryErrorAction =
 
 const MAX_RETRIES = 2;
 
+const LOGIN_PATH = "/login";
+
+/**
+ * Where an expired session sends the user: the front door, carrying why they
+ * are there and the path to resume once they sign in again (UX.md → Error →
+ * default behavior). Off-site and self-referential targets are dropped rather
+ * than followed.
+ */
+export function buildLoginRedirect(currentPath: string): string {
+  const resumable =
+    currentPath.startsWith("/") &&
+    !currentPath.startsWith("//") &&
+    currentPath !== LOGIN_PATH &&
+    !currentPath.startsWith(`${LOGIN_PATH}?`);
+
+  return resumable
+    ? `${LOGIN_PATH}?reason=expired&next=${encodeURIComponent(currentPath)}`
+    : `${LOGIN_PATH}?reason=expired`;
+}
+
 /**
  * Retries only failures that could plausibly succeed on a second attempt. A
  * 4xx is a decision, not a hiccup: retrying it just delays the error the user

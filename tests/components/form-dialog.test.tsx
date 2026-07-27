@@ -121,6 +121,22 @@ describe("FormDialog", () => {
     removeSpy.mockRestore();
   });
 
+  it("removes every way out when the form is not dismissible", async () => {
+    // The seam for a surface that must block the app until it is satisfied
+    // (a forced password change). Dismissible remains the default.
+    const onClose = vi.fn();
+    renderWithProviders(
+      <FormDialog {...baseProps} dismissible={false} onClose={onClose} onSubmit={vi.fn()}>
+        <TextInput label="Full name" />
+      </FormDialog>
+    );
+
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("registers no browser guard for a clean form", () => {
     const addSpy = vi.spyOn(window, "addEventListener");
 

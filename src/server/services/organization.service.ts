@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { PASSWORD_SETUP_PATHS } from "@/lib/auth/password-setup-ticket";
+import { getAuthCallbackUrl } from "../config/site-url";
 import { validateCreateOrganizationInput } from "../validators/organization.validator";
 import type { CreateOrganizationInput } from "../validators/organization.validator";
 import type { CreateOrganizationUserInput } from "../validators/user.validator";
@@ -71,7 +73,14 @@ export async function bootstrapOrganization(
   await ensureUsernameAvailable(supabase, validatedInput.adminUsername);
 
   // 4. Invite the administrator using the Auth Service
-  const authUser = await inviteUser(adminClient, validatedInput.adminEmail);
+  // The invitation returns the owner to the session handoff, which forwards
+  // them to the set-password screen. Without a redirect target they would
+  // land in the app having never chosen a password.
+  const authUser = await inviteUser(
+    adminClient,
+    validatedInput.adminEmail,
+    getAuthCallbackUrl(PASSWORD_SETUP_PATHS.invite)
+  );
 
   // 4b. Resolve the NO_SUBSCRIPTION system plan. Onboarding still contains
   // no billing/subscription logic (Subscription Principles, AGENTS.md) --

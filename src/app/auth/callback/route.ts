@@ -3,6 +3,12 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/types/database";
+import {
+  PASSWORD_SETUP_COOKIE,
+  PASSWORD_SETUP_PATHS,
+  isPasswordSetupFlow,
+  passwordSetupCookieOptions,
+} from "@/lib/auth/password-setup-ticket";
 
 const LOGIN_PATH = "/login";
 /**
@@ -10,7 +16,6 @@ const LOGIN_PATH = "/login";
  * belongs to. The callback does not decide that itself.
  */
 const DEFAULT_AUTHENTICATED_PATH = "/";
-const RESET_PASSWORD_PATH = "/reset-password";
 
 function getSafeRedirectPath(path: string | null, fallback: string) {
   if (path && path.startsWith("/") && !path.startsWith("//")) {
@@ -22,8 +27,11 @@ function getSafeRedirectPath(path: string | null, fallback: string) {
 function getRedirectPath(type: string | null, next: string | null) {
   switch (type) {
     case "recovery":
-      return RESET_PASSWORD_PATH;
+      // The bare `/reset-password` path is the *request* screen; a verified
+      // recovery link belongs on the set-a-new-password screen.
+      return PASSWORD_SETUP_PATHS.recovery;
     case "invite":
+      return getSafeRedirectPath(next, PASSWORD_SETUP_PATHS.invite);
     case "magiclink":
     case "email":
     case "signup":
@@ -31,6 +39,18 @@ function getRedirectPath(type: string | null, next: string | null) {
     default:
       return getSafeRedirectPath(next, DEFAULT_AUTHENTICATED_PATH);
   }
+}
+
+/**
+ * Records that this session came from a verified recovery or invitation link,
+ * which is what lets the set-password screen collect a password without the
+ * current one (ADR-0007). No other link type gets one.
+ */
+function issuePasswordSetupTicket(response: NextResponse, type: string | null) {
+  if (isPasswordSetupFlow(type)) {
+    response.cookies.set(PASSWORD_SETUP_COOKIE, type, passwordSetupCookieOptions());
+  }
+  return response;
 }
 
 function redirectToLogin(request: NextRequest, errorCode: string) {
@@ -92,7 +112,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       return redirectToLogin(request, "auth_callback_exchange_failed");
     }
-    return response;
+    return issuePasswordSetupTicket(response, type);
   }
 
   const { error } = await supabase.auth.verifyOtp({
@@ -104,5 +124,5 @@ export async function GET(request: NextRequest) {
     return redirectToLogin(request, "auth_callback_verify_failed");
   }
 
-  return response;
+  return issuePasswordSetupTicket(response, type);
 }

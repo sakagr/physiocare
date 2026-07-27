@@ -18,3 +18,4 @@ export { FormDialog, type FormDialogProps } from "./form-dialog";
 export { DetailDrawer, type DetailDrawerProps } from "./detail-drawer";
 export { StatusBadge, type StatusBadgeProps } from "./status-badge";
 export { Can, useCan, type CanProps } from "./can";
+export { ForbiddenState, type ForbiddenStateProps } from "./forbidden-state";

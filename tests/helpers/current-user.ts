@@ -103,6 +103,23 @@ export const currentUserFixtures = {
       role: { name: "SUPER_ADMIN", displayName: "Super Admin" },
       group: "platform",
       organization: null,
+      capabilities: ["platformApi:explore"],
+      clinics: [],
+    }),
+
+  /**
+   * A platform operational role with no UI in V1 (UX.md). Reaches
+   * `/platform/admin` alongside SUPER_ADMIN because the namespace guard is
+   * group-level, but holds no capabilities -- this is the fixture that
+   * exercises the API Explorer's SUPER_ADMIN-only gate.
+   */
+  platformSupport: () =>
+    makeCurrentUser({
+      id: "user-platform-support",
+      fullName: "Pat Support",
+      role: { name: "PLATFORM_SUPPORT", displayName: "Platform Support" },
+      group: "platform",
+      organization: null,
       capabilities: [],
       clinics: [],
     }),

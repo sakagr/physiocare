@@ -23,6 +23,7 @@ import {
   canManageOrganizationSettings,
   canManageSubscription,
   canViewAuditLogs,
+  canExplorePlatformApi,
 } from "./authorization.service";
 
 /**
@@ -30,7 +31,8 @@ import {
  * predicate that decides it. The token vocabulary is deliberately decoupled
  * from these predicate names -- the wire format (see `CurrentUser`) never
  * exposes them, so predicates can be renamed or recomposed without changing
- * any client.
+ * any client. Total over `Capability`, so a token with no predicate is a
+ * compile error rather than a silent gap.
  */
 const CAPABILITY_PREDICATES: Record<
   Capability,
@@ -47,7 +49,40 @@ const CAPABILITY_PREDICATES: Record<
   "settings:manage": canManageOrganizationSettings,
   "subscription:manage": canManageSubscription,
   "auditLogs:view": canViewAuditLogs,
+  "platformApi:explore": canExplorePlatformApi,
 };
+
+/**
+ * The capability tokens evaluated for an organization user. Kept as its own
+ * vocabulary, rather than every caller getting every token evaluated,
+ * because a token's meaning is group-specific: `platformApi:explore` is
+ * nonsensical for an org user and would be `false` for all of them,
+ * publishing a phantom "not granted" entry that invites confusion about
+ * whether it was ever considered.
+ */
+export const ORG_CAPABILITIES: readonly Capability[] = [
+  "patients:view",
+  "appointments:oversee",
+  "attendance:oversee",
+  "invoices:access",
+  "packages:view",
+  "reports:view",
+  "users:manage",
+  "clinics:manage",
+  "settings:manage",
+  "subscription:manage",
+  "auditLogs:view",
+];
+
+/**
+ * The capability tokens evaluated for a platform user. Previously platform
+ * users received an unconditionally empty capability array -- correct while
+ * no platform capability existed, but it made one inexpressible without this
+ * restructure (F2, ADR-0009).
+ */
+export const PLATFORM_CAPABILITIES: readonly Capability[] = [
+  "platformApi:explore",
+];
 
 /** The set of application roles that belong to the platform namespace. */
 function resolveGroup(roleName: string): UserGroup {
@@ -58,13 +93,16 @@ function resolveGroup(roleName: string): UserGroup {
 
 /**
  * Computes the caller's granted capability tokens by evaluating every
- * predicate in the map and keeping only those that return true.
+ * predicate for the given vocabulary and keeping only those that return
+ * true. The vocabulary is the caller's group's token set (`ORG_CAPABILITIES`
+ * or `PLATFORM_CAPABILITIES`), not the full `Capability` union -- a token
+ * outside the caller's group is never evaluated, not evaluated-and-denied.
  */
 async function computeCapabilities(
   supabase: SupabaseClient<Database>,
-  userId: string
+  userId: string,
+  tokens: readonly Capability[]
 ): Promise<Capability[]> {
-  const tokens = Object.keys(CAPABILITY_PREDICATES) as Capability[];
   const grants = await Promise.all(
     tokens.map((token) => CAPABILITY_PREDICATES[token](supabase, userId))
   );
@@ -109,8 +147,9 @@ async function resolveAccessibleClinics(
  * and coarse capability map for `GET /api/users/me`. Read-only query.
  *
  * Capabilities are the navigation/coarse set only; contextual per-item
- * capabilities remain server-side. Platform users receive no organization
- * capabilities -- their surface is the platform console.
+ * capabilities remain server-side. Platform users are evaluated against
+ * `PLATFORM_CAPABILITIES`, never `ORG_CAPABILITIES` -- their surface is the
+ * platform console, not an organization.
  */
 export async function getCurrentUser(
   supabase: SupabaseClient<Database>,
@@ -133,8 +172,10 @@ export async function getCurrentUser(
 
   const isOrgUser = group === "org" && Boolean(user.organization_id);
   const capabilities = isOrgUser
-    ? await computeCapabilities(supabase, userId)
-    : [];
+    ? await computeCapabilities(supabase, userId, ORG_CAPABILITIES)
+    : group === "platform"
+      ? await computeCapabilities(supabase, userId, PLATFORM_CAPABILITIES)
+      : [];
   const clinics = isOrgUser
     ? await resolveAccessibleClinics(supabase, userId, user.organization_id!)
     : [];

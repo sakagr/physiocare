@@ -87,16 +87,59 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
     expect(me.capabilities).not.toContain("reports:view");
   });
 
-  it("places a super admin in the platform group with no org capabilities", async () => {
+  it("grants a super admin the platform API explorer capability and no org capabilities", async () => {
     const superAdmin = await ctx.createUser(null, "SUPER_ADMIN", "super");
 
     const me = await getCurrentUser(ctx.admin, superAdmin.id);
 
     expect(me.group).toBe("platform");
     expect(me.organization).toBeNull();
-    expect(me.capabilities).toEqual([]);
+    expect(me.capabilities).toEqual<Capability[]>(["platformApi:explore"]);
     expect(me.clinics).toEqual([]);
   });
+
+  /**
+   * These platform operational roles have no UI in V1 (UX.md) and the
+   * namespace guard only checks group, so they still reach `/platform/admin`
+   * alongside SUPER_ADMIN. The API Explorer's own SUPER_ADMIN-only gate is
+   * what keeps them out -- this pins that none of them are granted
+   * `platformApi:explore`, the regression this restructure exists to close.
+   */
+  it.each(["PLATFORM_SUPPORT", "PLATFORM_SALES", "PLATFORM_BILLING"] as const)(
+    "grants %s no capabilities",
+    async (role) => {
+      const platformUser = await ctx.createUser(null, role, role.toLowerCase());
+
+      const me = await getCurrentUser(ctx.admin, platformUser.id);
+
+      expect(me.group).toBe("platform");
+      expect(me.capabilities).toEqual([]);
+    }
+  );
+
+  /**
+   * The tests above all call `getCurrentUser` with `ctx.admin` -- the
+   * service-role client, which bypasses RLS entirely. That left a blind
+   * spot: `users_select_policy` denied a platform role (other than
+   * SUPER_ADMIN) permission to read its own row, because `organization_id`
+   * (row) and `current_organization_id()` (caller) are both NULL and
+   * `NULL = NULL` is not TRUE in SQL -- so `GET /api/users/me` 404'd for
+   * every real PLATFORM_SUPPORT/SALES/BILLING session. This exercises a real
+   * signed-in, RLS-scoped session (`ctx.signedInClient`) instead of the admin
+   * client, the only way to catch that class of gap.
+   */
+  it.each(["SUPER_ADMIN", "PLATFORM_SUPPORT", "PLATFORM_SALES", "PLATFORM_BILLING"] as const)(
+    "lets %s read its own profile through a real RLS-scoped session, not just the admin client",
+    async (role) => {
+      const platformUser = await ctx.createUser(null, role, `rls-${role.toLowerCase()}`);
+      const session = await ctx.signedInClient(platformUser.email);
+
+      const me = await getCurrentUser(session, platformUser.id);
+
+      expect(me.id).toBe(platformUser.id);
+      expect(me.group).toBe("platform");
+    }
+  );
 
   /**
    * The clinic switcher in the shell's user menu lists the clinics a user may

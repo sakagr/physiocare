@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Button, Center, Stack, Text, ThemeIcon, Title } from "@mantine/core";
 import { IconLock } from "@tabler/icons-react";
@@ -12,6 +14,14 @@ import { IconLock } from "@tabler/icons-react";
  *
  * A way back is required, not optional: the whole point of the frame is that
  * it is not a dead end.
+ *
+ * Client Component, not merely because Mantine's primitives already are one:
+ * `<Button component={Link}>` passes the `Link` reference as a plain prop
+ * value, and React can only serialize a Client Component reference used as
+ * a prop across the Server→Client boundary when the element containing it
+ * is itself rendered client-side. Rendered from a Server Component (as this
+ * was from `platform/admin/page.tsx`), the same JSX throws "Functions cannot
+ * be passed directly to Client Components".
  */
 export interface ForbiddenStateProps {
   /** What was refused, in the user's terms. */

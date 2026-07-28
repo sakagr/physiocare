@@ -1,5 +1,18 @@
 import { z } from "zod";
-import type { AppRole } from "../repositories/user.repository";
+
+/**
+ * The roles assignable to an organization user. Narrower than the full
+ * `AppRole` union (which also carries `SUPER_ADMIN` and the `PLATFORM_*`
+ * roles) by construction, so a submitted platform role is rejected by the
+ * enum itself rather than by a follow-up `.refine()` -- which also makes it
+ * visible in the generated OpenAPI spec (F2, decision #10): the previous
+ * `.refine()` shape let the spec document all 8 roles as legal here, which
+ * the server would then reject.
+ */
+const organizationRoleSchema = z.enum(
+  ["ORG_OWNER", "ORG_ADMIN", "ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST"],
+  { message: "Only organization roles are allowed." }
+);
 
 /**
  * Zod validation schema for creating a new organization user.
@@ -29,20 +42,7 @@ export const createOrganizationUserSchema = z.object({
     .trim()
     .optional()
     .or(z.literal("")),
-  role: z
-    .enum([
-      "SUPER_ADMIN",
-      "PLATFORM_SUPPORT",
-      "PLATFORM_SALES",
-      "PLATFORM_BILLING",
-      "ORG_OWNER",
-      "ORG_ADMIN",
-      "ORG_PHYSIOTHERAPIST",
-      "ORG_RECEPTIONIST",
-    ])
-    .refine((val): val is AppRole => val.startsWith("ORG_"), {
-      message: "Only organization roles are allowed.",
-    }),
+  role: organizationRoleSchema,
 });
 
 /**
@@ -94,20 +94,7 @@ export function validateUpdateUserProfileInput(input: unknown): UpdateUserProfil
  * Zod validation schema for updating user role.
  */
 export const changeUserRoleSchema = z.object({
-  role: z
-    .enum([
-      "SUPER_ADMIN",
-      "PLATFORM_SUPPORT",
-      "PLATFORM_SALES",
-      "PLATFORM_BILLING",
-      "ORG_OWNER",
-      "ORG_ADMIN",
-      "ORG_PHYSIOTHERAPIST",
-      "ORG_RECEPTIONIST",
-    ])
-    .refine((val): val is AppRole => val.startsWith("ORG_"), {
-      message: "Only organization roles are allowed.",
-    }),
+  role: organizationRoleSchema,
 });
 
 /**

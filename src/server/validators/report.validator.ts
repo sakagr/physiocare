@@ -23,7 +23,12 @@ export const billingReportQuerySchema = z
   .refine((v) => daysBetween(v.dateFrom, v.dateTo) <= MAX_REPORT_RANGE_DAYS, {
     message: `Report range cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`,
     path: ["dateTo"],
-  });
+  })
+  // The two .refine()s above are invisible to z.toJSONSchema() (F2, decision
+  // #10) -- this .describe() is what the generated spec surfaces instead.
+  .describe(
+    `dateTo must be on or after dateFrom, and the range between them cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`
+  );
 
 /**
  * Validation schema for the physiotherapist report query.
@@ -39,7 +44,10 @@ export const physiotherapistReportQuerySchema = z
   .refine((v) => daysBetween(v.dateFrom, v.dateTo) <= MAX_REPORT_RANGE_DAYS, {
     message: `Report range cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`,
     path: ["dateTo"],
-  });
+  })
+  .describe(
+    `dateTo must be on or after dateFrom, and the range between them cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`
+  );
 
 /**
  * Validation schema for the commission report query. Same range-bounded
@@ -57,7 +65,10 @@ export const commissionReportQuerySchema = z
   .refine((v) => daysBetween(v.dateFrom, v.dateTo) <= MAX_REPORT_RANGE_DAYS, {
     message: `Report range cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`,
     path: ["dateTo"],
-  });
+  })
+  .describe(
+    `dateTo must be on or after dateFrom, and the range between them cannot exceed ${MAX_REPORT_RANGE_DAYS} days.`
+  );
 
 /**
  * Validation schema for an export request's output format.

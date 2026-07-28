@@ -72,7 +72,9 @@ export const changePasswordSchema = z
   .refine((value) => value.newPassword !== value.currentPassword, {
     message: "Choose a password you haven't used here before.",
     path: ["newPassword"],
-  });
+  })
+  // Invisible to z.toJSONSchema() (F2, decision #10) -- surfaced explicitly.
+  .describe("newPassword must be different from the current password.");
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 

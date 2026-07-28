@@ -335,7 +335,7 @@ V1 platform surface is intentionally minimal: Super Admin gets no operational UI
 
 | Destination | Purpose | Roles | Route | Feature | Phase |
 | --- | --- | --- | --- | --- | --- |
-| API Explorer | OpenAPI spec (generated from validators) with same-origin try-it-out | SA | `/platform/admin` | `platform-api` | F2 |
+| API Explorer | OpenAPI spec (generated from validators and response contracts) with same-origin try-it-out; hard-disabled in production | SA | `/platform/admin` | `platform-api` | F2 ✅ |
 
 ## Organization App — `(org)/app/…`
 

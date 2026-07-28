@@ -119,6 +119,19 @@ export async function canBootstrapOrganization(
 }
 
 /**
+ * Verifies if a user is authorized to use the platform API explorer
+ * (F2). SUPER_ADMIN only, per UX.md -- the platform operational roles
+ * (`PLATFORM_SUPPORT`, `PLATFORM_SALES`, `PLATFORM_BILLING`) reach the
+ * platform namespace but have no UI in V1 and must not reach this one.
+ */
+export async function canExplorePlatformApi(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<boolean> {
+  return hasRole(supabase, userId, "SUPER_ADMIN");
+}
+
+/**
  * Verifies if a user is authorized to create a new user with a specific target role.
  */
 export async function canCreateUser(

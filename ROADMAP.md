@@ -152,7 +152,7 @@ Shared UI groundwork.
 
 ---
 
-# Phase F1 – Authentication & Session
+# Phase F1 – Authentication & Session ✅
 
 Entry and identity.
 
@@ -165,7 +165,7 @@ Entry and identity.
 
 ---
 
-# Phase F2 – Platform API Tooling
+# Phase F2 – Platform API Tooling ✅
 
 SUPER_ADMIN API explorer.
 

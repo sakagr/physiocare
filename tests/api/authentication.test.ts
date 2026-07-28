@@ -66,6 +66,7 @@ import * as logoutRoute from "@/app/api/auth/logout/route";
 import * as requestPasswordResetRoute from "@/app/api/auth/request-password-reset/route";
 import * as setPasswordRoute from "@/app/api/auth/set-password/route";
 import * as changePasswordRoute from "@/app/api/auth/change-password/route";
+import * as platformOpenApiRoute from "@/app/api/platform/openapi/route";
 
 const request = (method = "GET", body?: unknown) => new NextRequest("http://localhost/api/test", {
   method,
@@ -85,6 +86,7 @@ describe("public API authentication", () => {
     ["users create", () => usersRoute.POST(request("POST", {}))],
     ["users list", () => usersRoute.GET(request())],
     ["current user", () => meRoute.GET(request())],
+    ["platform openapi spec", () => platformOpenApiRoute.GET(request())],
     ["user detail", () => userRoute.GET(request(), context)],
     ["user profile update", () => userRoute.PATCH(request("PATCH", {}), context)],
     ["user offboard", () => userRoute.DELETE(request("DELETE"), context)],

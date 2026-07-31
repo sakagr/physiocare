@@ -21,6 +21,8 @@ import * as activateUserRoute from "@/app/api/users/[id]/activate/route";
 import * as deactivateUserRoute from "@/app/api/users/[id]/deactivate/route";
 import * as changeRoleRoute from "@/app/api/users/[id]/change-role/route";
 import * as userClinicsRoute from "@/app/api/users/[id]/clinics/route";
+import * as userCompensationRoute from "@/app/api/users/[id]/compensation/route";
+import * as resetPasswordRoute from "@/app/api/users/[id]/reset-password/route";
 import * as clinicsRoute from "@/app/api/clinics/route";
 import * as clinicRoute from "@/app/api/clinics/[id]/route";
 import * as activateClinicRoute from "@/app/api/clinics/[id]/activate/route";
@@ -94,6 +96,8 @@ describe("public API authentication", () => {
     ["user deactivation", () => deactivateUserRoute.POST(request("POST"), context)],
     ["user role change", () => changeRoleRoute.POST(request("POST", {}), context)],
     ["user clinics", () => userClinicsRoute.GET(request(), context)],
+    ["user compensation history", () => userCompensationRoute.GET(request(), context)],
+    ["user reset password", () => resetPasswordRoute.POST(request("POST"), context)],
     ["clinics create", () => clinicsRoute.POST(request("POST", {}))],
     ["clinics list", () => clinicsRoute.GET(request())],
     ["clinic detail", () => clinicRoute.GET(request(), context)],

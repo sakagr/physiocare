@@ -240,8 +240,8 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
   2. Actor assigns the user to one or more clinics.
   3. **Maintain:** actor later changes the user's role, or deactivates/offboards them; system applies the change.
   4. **Reset password:** actor resets a user's password to a reveal-once temporary value, shared securely with the user — the recovery path for roles without a usable email (Physiotherapist, Reception; see Flow 2).
-  5. **Compensation:** the Owner reviews a user's compensation configuration.
-- **Branches:** onboard vs. role change vs. deactivate vs. offboard vs. password reset; compensation view is Owner-only; deactivate is reversible, offboard is terminal (per destructive-action conventions).
+  5. **Compensation:** the Owner reviews and sets a user's compensation configuration; each set inserts a new time-versioned record rather than overwriting history, so past commission calculations remain stable after a rate change.
+- **Branches:** onboard vs. role change vs. deactivate vs. offboard vs. password reset; compensation view **and set** are Owner-only (Administrators do not see or set compensation, even though they otherwise manage users); deactivate is reversible, offboard is terminal (per destructive-action conventions).
 - **End states:** *Success* — the user is in the intended lifecycle state, clinic-assigned as needed. *Failure* — blocked (e.g. a uniqueness conflict on email/username).
 
 ### 10. Manage clinics & user assignments — Owner/Admin
@@ -378,7 +378,7 @@ Hosted within a destination or the app shell, per the surface model.
 | Create invoice | Dialog | Dashboard, Invoices, Patient Workspace | Owner, Admin, Reception | `invoices` | F7 |
 | Invoice detail — line items, record payment, status | Dialog | Invoices, Patient Workspace, Appointment detail | Owner, Admin, Reception | `payments` | F7 |
 | Create / Edit package · activate / deactivate | Dialog | Packages | Owner, Admin | `packages` | F5 |
-| User detail & compensation | Drawer | Users | Owner, Admin (compensation: Owner) | `users` | F3 |
+| User detail & compensation | Drawer | Users | Owner, Admin (compensation view + set: Owner only) | `users` | F3 |
 | Create user · reset password · change role · activate / deactivate · offboard | Dialog | Users | Owner, Admin | `users` | F3 |
 | Clinic detail & user–clinic assignment | Drawer + Dialog | Clinics | Owner, Admin | `clinics` | F3 |
 | Create / Edit clinic · activate / deactivate | Dialog | Clinics | Owner, Admin | `clinics` | F3 |
@@ -438,6 +438,8 @@ The API returns `{ error, code }` for coded errors, `{ error, details }` for 400
 | Limit / subscription enforcement | 402 · `SUBSCRIPTION_REQUIRED`; 403 · `ORGANIZATION_LIMIT_EXCEEDED` | Dedicated enforcement state: state the limit and its resolution (renew / upgrade) for the Owner; other roles see a softer "ask your owner" message. |
 | Non-field request error | 400 · invalid payload, `REPORT_ROW_LIMIT_EXCEEDED` | Toast; for the row limit, guidance to narrow the filters / date range. |
 | Unexpected error | 500 · internal, network failure | Toast "Something went wrong" with a retry; error logged. Handled globally. |
+
+**F3 note:** the create-user and create-clinic dialogs do not yet build the dedicated enforcement state above — they use the generic 402/403 toast (this table's default), with no per-screen message and no Owner/other-role distinction, and the dialog simply stays open with input intact. This is a deliberate interim, not an oversight: F4 owns *Subscription Plan Selection*, *Activation & Renewal*, and *Limit Enforcement States*, and replaces this generic toast with the role-varying dedicated state described above.
 
 ## Mutation feedback
 
@@ -541,6 +543,8 @@ Destinations that browse records (Patients, Invoices, Users, Clinics, Packages) 
 - A **toolbar** provides search, filtering, sorting, and pagination.
 - Opening an item preserves the user's working context wherever practical, using the contextual surface or destination defined by the Screen Inventory.
 - Loading, empty, and error states follow the Interaction & State Conventions; the empty state names what would appear and offers the primary create action where permitted.
+
+**F3 note:** the Users collection's role-filter dropdown is sourced from the same server-supplied `assignableRoles` list the create-user and change-role pickers use (client never hardcodes role names). This is a deliberate interim that avoided adding a dedicated roles endpoint: an Administrator's filter therefore offers only the roles they may assign (Physiotherapist, Receptionist), not every role that exists in the organization — the collection itself still lists every user regardless of role, so this only narrows the filter's own options, not what's visible. The underlying conflation is that `assignableRoles` answers "which roles may I assign," and F3 is reusing it to answer a different question, "which roles exist to filter by." A later phase should decide this deliberately — e.g. a role list scoped to "roles present among visible rows," independent of assignment permission — rather than silently inheriting today's shortcut.
 
 ## Forms
 

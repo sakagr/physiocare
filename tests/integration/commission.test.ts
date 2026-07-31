@@ -7,7 +7,7 @@ import { transitionAppointmentStatus } from "@/server/services/appointment-workf
 import { createPackage } from "@/server/services/package.service";
 import { createPatientPackage } from "@/server/services/patient-package.service";
 import { createInvoice } from "@/server/services/invoice.service";
-import { setUserCompensation, calculateCommission } from "@/server/services/commission.service";
+import { setUserCompensation, calculateCommission, getUserCompensationHistory } from "@/server/services/commission.service";
 import {
   validAppointmentInput,
   validClinicInput,
@@ -58,6 +58,30 @@ describeIntegration("Commission calculations", () => {
     await expect(
       setUserCompensation(ctx.admin, owner.id, physio.id, { type: "fixed", value: 100, effectiveFrom: "2026-01-01" })
     ).rejects.toThrow();
+  });
+
+  it("narrows compensation set/view to Owner only, and returns full history newest-first (D1/D2/ADR-0011)", async () => {
+    const { organization, owner, physio } = await setup("history");
+    const admin = await ctx.createUser(organization.id, "ORG_ADMIN", "history-admin");
+
+    // Compensation is Owner-only now (FL1) -- an Administrator, who could
+    // previously set it, is rejected the same as a receptionist.
+    await expect(
+      setUserCompensation(ctx.admin, admin.id, physio.id, { type: "percentage", value: 5 })
+    ).rejects.toMatchObject({ code: ErrorCodes.FORBIDDEN });
+    await expect(getUserCompensationHistory(ctx.admin, admin.id, physio.id)).rejects.toMatchObject({ code: ErrorCodes.FORBIDDEN });
+
+    await setUserCompensation(ctx.admin, owner.id, physio.id, { type: "fixed", value: 10, effectiveFrom: "2025-01-01" });
+    await setUserCompensation(ctx.admin, owner.id, physio.id, { type: "fixed", value: 20, effectiveFrom: "2025-06-01" });
+
+    const history = await getUserCompensationHistory(ctx.admin, owner.id, physio.id);
+    expect(history.map((record) => record.effective_from)).toEqual(["2025-06-01", "2025-01-01"]);
+
+    // Cross-organization access reads as not-found, not forbidden -- mirrors
+    // the scoping convention every other target-user lookup in this phase uses.
+    const otherOrganization = await ctx.createOrganization(`${ctx.runId}-history-other-org`);
+    const otherOwner = await ctx.createUser(otherOrganization.id, "ORG_OWNER", "history-other-owner");
+    await expect(getUserCompensationHistory(ctx.admin, otherOwner.id, physio.id)).rejects.toMatchObject({ code: ErrorCodes.NOT_FOUND });
   });
 
   it("calculates percentage commission from the attributed invoice on a normal appointment", async () => {

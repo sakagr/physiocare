@@ -46,3 +46,10 @@ supabase/snippets/Untitled*
 .env.keys
 .env.local
 .env.*.local
+
+# Playwright (F3 E2E lane)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+tests/e2e/.seed.json

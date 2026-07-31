@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import type { User } from "./user.repository";
+import type { User, Role } from "./user.repository";
 import type { Clinic } from "./clinic.repository";
 
 export type UserClinic = Database["public"]["Tables"]["user_clinics"]["Row"];
@@ -142,16 +142,18 @@ export async function findAssignmentsByClinic(
 }
 
 /**
- * Retrieves the list of active users assigned to a clinic.
+ * Retrieves the list of active users (with their role embedded) assigned to
+ * a clinic. Mirrors `listUsers`' `role:roles!inner(*)` shape (FL5) so a
+ * clinic's member list can show roles without a second lookup.
  */
 export async function listUsersByClinic(
   supabase: SupabaseClient<Database>,
   organizationId: string,
   clinicId: string
-): Promise<User[]> {
+): Promise<(User & { role: Role })[]> {
   const { data, error } = await supabase
     .from("user_clinics")
-    .select("users!inner(*)")
+    .select("users!inner(*, role:roles!inner(*))")
     .eq("clinic_id", clinicId)
     .eq("organization_id", organizationId)
     .is("deleted_at", null)
@@ -161,8 +163,9 @@ export async function listUsersByClinic(
     throw error;
   }
 
-  // `users!inner(*)` yields one embedded user per assignment row.
-  const assignments = data as unknown as { users: User }[];
+  // `users!inner(*, role:roles!inner(*))` yields one embedded user (with its
+  // role) per assignment row, which the generated types still widen to nullable.
+  const assignments = data as unknown as { users: User & { role: Role } }[];
   return assignments.map((assignment) => assignment.users);
 }
 

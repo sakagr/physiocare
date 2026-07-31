@@ -7,13 +7,14 @@ import {
   findUserByUsername,
   findUserByEmail,
   findUserById,
+  findRoleById,
   listUsers,
   countUsers,
   findUserWithRoleById,
 } from "../repositories/user.repository";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
-import { canManageUsers, hasRole } from "./authorization.service";
+import { canManageUsers, canManageTargetUser, canManageRole, getAssignableRoles, hasRole } from "./authorization.service";
 
 export interface CreateOrganizationOwnerInput {
   authUserId: string;
@@ -117,8 +118,34 @@ export async function createOrganizationUserProfile(
 }
 
 /**
+ * Resolves the display-name pairs for a caller-derived assignable-role list
+ * (D9): the client never compares role names, so the label the picker
+ * renders is looked up server-side rather than hardcoded on the client.
+ */
+async function toAssignableRolePairs(
+  supabase: SupabaseClient<Database>,
+  roleNames: AppRole[]
+): Promise<{ name: AppRole; display_name: string }[]> {
+  return Promise.all(
+    roleNames.map(async (name) => {
+      const role = await findRoleByName(supabase, name);
+      return { name, display_name: role?.display_name ?? name };
+    })
+  );
+}
+
+export interface OrganizationUserListResult extends PagedResult<User & { role: Role; canManage: boolean }> {
+  /** Caller-derived, not per-row (FL3) -- one list for the whole page. */
+  assignableRoles: { name: AppRole; display_name: string }[];
+}
+
+/**
  * Lists organization users with filters, search, and pagination.
- * Scoped strictly to the caller's organization.
+ * Scoped strictly to the caller's organization. Each row carries a
+ * server-computed `canManage` hint (ADR-0010) so the UI can hide row
+ * actions per UX.md:136 rather than showing them and then failing --
+ * computed in-memory from the caller's own role and each row's already
+ * role-embedded `role.name`, avoiding an N+1 of `canManageTargetUser` calls.
  */
 export async function listOrganizationUsers(
   supabase: SupabaseClient<Database>,
@@ -130,43 +157,55 @@ export async function listOrganizationUsers(
     role?: AppRole;
     isActive?: boolean;
   }
-): Promise<PagedResult<User & { role: Role }>> {
+): Promise<OrganizationUserListResult> {
   // 1. Authorize general caller capability
   const isAuthorized = await canManageUsers(supabase, callerUserId);
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
 
-  // Get caller's organization ID
+  // Get caller's organization ID and role
   const caller = await findUserById(supabase, callerUserId);
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  const callerRoleRecord = await findRoleById(supabase, caller.role_id);
+  if (!callerRoleRecord) {
+    throw new Error("Caller role not found");
+  }
+  const callerRoleName = callerRoleRecord.name;
 
   const organizationId = caller.organization_id;
 
   // 2. Fetch data
   const users = await listUsers(supabase, organizationId, filters);
   const total = await countUsers(supabase, organizationId, filters);
+  const assignableRoles = await toAssignableRolePairs(supabase, await getAssignableRoles(supabase, callerUserId));
 
   return {
-    items: users,
+    items: users.map((user) => ({
+      ...user,
+      canManage: callerRoleName === "SUPER_ADMIN" || canManageRole(callerRoleName, user.role.name),
+    })),
     total,
     page: filters.page,
     pageSize: filters.limit,
     totalPages: Math.ceil(total / filters.limit),
+    assignableRoles,
   };
 }
 
 /**
  * Retrieves the details of a specific user.
- * Scoped strictly to the caller's organization.
+ * Scoped strictly to the caller's organization. Carries the same
+ * server-computed `canManage` hint as the list (ADR-0010).
  */
 export async function getUserDetails(
   supabase: SupabaseClient<Database>,
   callerUserId: string,
   targetUserId: string
-): Promise<User & { role: Role }> {
+): Promise<User & { role: Role; canManage: boolean }> {
   // 1. Authorize general caller capability
   const isAuthorized = await canManageUsers(supabase, callerUserId);
   if (!isAuthorized) {
@@ -190,5 +229,6 @@ export async function getUserDetails(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return targetUser;
+  const canManage = await canManageTargetUser(supabase, callerUserId, targetUserId);
+  return { ...targetUser, canManage };
 }

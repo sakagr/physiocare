@@ -48,11 +48,15 @@ const OWNER_CAPABILITIES: Capability[] = [
   "settings:manage",
   "subscription:manage",
   "auditLogs:view",
+  "compensation:view",
 ];
 
-/** Admin is Owner minus subscription management (Owner-only per UX). */
+/**
+ * Admin is Owner minus subscription management and compensation viewing --
+ * both Owner-only per UX.md (compensation per D1/ADR-0011).
+ */
 const ADMIN_CAPABILITIES: Capability[] = OWNER_CAPABILITIES.filter(
-  (capability) => capability !== "subscription:manage"
+  (capability) => capability !== "subscription:manage" && capability !== "compensation:view"
 );
 
 const PHYSIO_CAPABILITIES: Capability[] = [

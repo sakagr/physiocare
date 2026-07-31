@@ -8,6 +8,13 @@ afterEach(async () => {
   if (typeof document !== "undefined") {
     const { cleanup } = await import("@testing-library/react");
     cleanup();
+
+    // Mantine's notification store is a module-level singleton (F3): a toast
+    // shown in one test would otherwise still be queued/displayed the next
+    // time <Notifications /> mounts in a later test.
+    const { notifications } = await import("@mantine/notifications");
+    notifications.clean();
+    notifications.cleanQueue();
   }
 });
 
@@ -38,4 +45,12 @@ if (typeof window !== "undefined") {
   };
 
   window.HTMLElement.prototype.scrollIntoView = () => {};
+
+  // jsdom has no Clipboard API, and `CopyButton`/`useClipboard` (F3's
+  // reveal-once surface) call `navigator.clipboard.writeText` unconditionally.
+  Object.defineProperty(window.navigator, "clipboard", {
+    writable: true,
+    configurable: true,
+    value: { writeText: async () => {} },
+  });
 }

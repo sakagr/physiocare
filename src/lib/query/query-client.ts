@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, type QueryClientConfig } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import {
   buildLoginRedirect,
@@ -42,6 +42,20 @@ function dispatchErrorAction(error: unknown): void {
   notifications.show({ color: "danger", message: action.message });
 }
 
+/**
+ * The cache-level error dispatch, factored out so `renderWithProviders`
+ * (F3) can compose it with test-friendly defaults (`retry: false`,
+ * `staleTime: 0`) instead of adopting `makeQueryClient()`'s production
+ * defaults wholesale -- those would re-enable retries in tests and make
+ * error-path assertions slow and flaky.
+ */
+export function createErrorDispatchCaches(): Pick<QueryClientConfig, "queryCache" | "mutationCache"> {
+  return {
+    queryCache: new QueryCache({ onError: dispatchErrorAction }),
+    mutationCache: new MutationCache({ onError: dispatchErrorAction }),
+  };
+}
+
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
@@ -54,8 +68,7 @@ export function makeQueryClient(): QueryClient {
         retry: false,
       },
     },
-    queryCache: new QueryCache({ onError: dispatchErrorAction }),
-    mutationCache: new MutationCache({ onError: dispatchErrorAction }),
+    ...createErrorDispatchCaches(),
   });
 }
 

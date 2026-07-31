@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:integration": "RUN_SUPABASE_INTEGRATION=1 vitest run tests/integration --no-file-parallelism",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "openapi:generate": "vite-node -c vitest.config.mts scripts/generate-openapi.ts"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",

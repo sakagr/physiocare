@@ -177,7 +177,7 @@ SUPER_ADMIN API explorer.
 
 ---
 
-# Phase F3 – Org: Users & Clinics
+# Phase F3 – Org: Users & Clinics ✅
 
 People and locations.
 
@@ -272,6 +272,7 @@ Hardening before launch.
 - End-to-End Testing
 - Performance & Bundle Budget
 - Feature-boundary ESLint rule (deferred from F0: enforce that cross-feature imports go through each feature's `index.ts` barrel — `AGENTS.md` → Project Structure)
+- API Tooling: SUPER_ADMIN organization context (deferred from F2)
 
 ---
 

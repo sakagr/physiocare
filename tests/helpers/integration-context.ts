@@ -28,7 +28,7 @@ export interface IntegrationContext {
   roleId(name: AppRole): Promise<string>;
   createOrganization(name: string): Promise<Organization>;
   createUser(organizationId: string | null, role: AppRole, suffix: string): Promise<User & { email: string }>;
-  signedInClient(email: string): Promise<SupabaseClient<Database>>;
+  signedInClient(email: string, signInPassword?: string): Promise<SupabaseClient<Database>>;
 }
 
 function requireIntegrationEnvironment() {
@@ -147,9 +147,9 @@ export function setupIntegrationContext(suffix: string): IntegrationContext {
     return { ...data, email };
   };
 
-  context.signedInClient = async (email) => {
+  context.signedInClient = async (email, signInPassword = password) => {
     const client = createSupabaseClient(publishableKey!);
-    const { error } = await client.auth.signInWithPassword({ email, password });
+    const { error } = await client.auth.signInWithPassword({ email, password: signInPassword });
     if (error) throw error;
     return client;
   };

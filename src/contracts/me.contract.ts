@@ -29,6 +29,7 @@ export const CAPABILITIES = [
   "subscription:manage",
   "auditLogs:view",
   "platformApi:explore",
+  "compensation:view",
 ] as const;
 
 export const capabilitySchema = z.enum(CAPABILITIES);

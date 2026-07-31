@@ -4387,6 +4387,33 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "role": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "display_name",
+                          "created_at",
+                          "updated_at"
+                        ]
                       }
                     },
                     "required": [
@@ -4400,7 +4427,8 @@
                       "is_active",
                       "created_at",
                       "updated_at",
-                      "deleted_at"
+                      "deleted_at",
+                      "role"
                     ]
                   }
                 }
@@ -16055,6 +16083,142 @@
       }
     },
     "/api/users/{id}/compensation": {
+      "get": {
+        "summary": "Get a user's compensation history",
+        "description": "Owner-only (ADR-0011) -- returns the full history, newest-first (D2).",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compensation history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "organization_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "percentage",
+                          "fixed"
+                        ]
+                      },
+                      "value": {
+                        "type": "number"
+                      },
+                      "effective_from": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      },
+                      "created_by": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "organization_id",
+                      "user_id",
+                      "type",
+                      "value",
+                      "effective_from",
+                      "created_at",
+                      "updated_at",
+                      "created_by"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Not found."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Set a user's compensation record",
         "tags": [
@@ -16179,6 +16343,105 @@
                 "schema": {
                   "$ref": "#/components/schemas/Error",
                   "description": "Invalid request payload"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Not found."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}/reset-password": {
+      "post": {
+        "summary": "Reset a user's password (admin-mediated)",
+        "description": "The reveal-once initial password, regenerated. The only recovery path for roles with a placeholder email (Hole B).",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "User ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Password reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "initialPassword": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "username",
+                    "initialPassword"
+                  ]
                 }
               }
             }
@@ -16384,6 +16647,7 @@
     "/api/users/{id}": {
       "get": {
         "summary": "Get user details",
+        "description": "Carries a server-computed `canManage` hint (ADR-0010).",
         "tags": [
           "Users"
         ],
@@ -16493,6 +16757,9 @@
                         "created_at",
                         "updated_at"
                       ]
+                    },
+                    "canManage": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -16507,7 +16774,8 @@
                     "created_at",
                     "updated_at",
                     "deleted_at",
-                    "role"
+                    "role",
+                    "canManage"
                   ]
                 }
               }
@@ -17000,7 +17268,8 @@
                           "settings:manage",
                           "subscription:manage",
                           "auditLogs:view",
-                          "platformApi:explore"
+                          "platformApi:explore",
+                          "compensation:view"
                         ]
                       }
                     },
@@ -17377,6 +17646,9 @@
                               "created_at",
                               "updated_at"
                             ]
+                          },
+                          "canManage": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -17391,7 +17663,8 @@
                           "created_at",
                           "updated_at",
                           "deleted_at",
-                          "role"
+                          "role",
+                          "canManage"
                         ]
                       }
                     },
@@ -17414,6 +17687,24 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "assignableRoles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "display_name"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -17421,7 +17712,8 @@
                     "total",
                     "page",
                     "pageSize",
-                    "totalPages"
+                    "totalPages",
+                    "assignableRoles"
                   ]
                 }
               }

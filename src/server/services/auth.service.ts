@@ -231,6 +231,29 @@ export async function setUserEnabled(
 }
 
 /**
+ * Sets a specific Auth user's password, on their behalf, without holding or
+ * needing their session. Distinct from `updatePassword` above, which sets
+ * the password of whichever user the given client is itself authenticated
+ * as -- that primitive cannot express an admin resetting someone else's
+ * password, since the admin client has no "current user" of its own.
+ *
+ * @param adminClient - The service-role Supabase client.
+ * @param userId - The ID of the authentication user whose password to set.
+ * @param password - The new password.
+ */
+export async function setUserPassword(
+  adminClient: SupabaseClient<Database>,
+  userId: string,
+  password: string
+): Promise<void> {
+  const { error } = await adminClient.auth.admin.updateUserById(userId, { password });
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
  * Creates a new authentication user in Supabase Auth.
  * 
  * @param adminClient - The service-role Supabase client.

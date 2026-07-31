@@ -24,6 +24,7 @@ import {
   canManageSubscription,
   canViewAuditLogs,
   canExplorePlatformApi,
+  canViewCompensation,
 } from "./authorization.service";
 
 /**
@@ -50,6 +51,7 @@ const CAPABILITY_PREDICATES: Record<
   "subscription:manage": canManageSubscription,
   "auditLogs:view": canViewAuditLogs,
   "platformApi:explore": canExplorePlatformApi,
+  "compensation:view": canViewCompensation,
 };
 
 /**
@@ -72,6 +74,7 @@ export const ORG_CAPABILITIES: readonly Capability[] = [
   "settings:manage",
   "subscription:manage",
   "auditLogs:view",
+  "compensation:view",
 ];
 
 /**

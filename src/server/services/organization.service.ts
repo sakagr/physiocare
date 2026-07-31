@@ -12,7 +12,7 @@ import {
   updateOrganizationStatus,
 } from "../repositories/organization.repository";
 import { findSubscriptionPlanByName } from "../repositories/subscription.repository";
-import { inviteUser, deleteUser, generateInitialPassword, createAuthUser, setUserDisabled, setUserEnabled } from "./auth.service";
+import { inviteUser, deleteUser, generateInitialPassword, createAuthUser, setUserDisabled, setUserEnabled, setUserPassword } from "./auth.service";
 import type { AppRole, UpdateUser, User } from "../repositories/user.repository";
 import { findUserById, updateUser, findRoleByName } from "../repositories/user.repository";
 import {
@@ -210,6 +210,46 @@ export async function createOrganizationUser(
     }
     throw error;
   }
+}
+
+export interface ResetUserPasswordResult {
+  userId: string;
+  username: string;
+  initialPassword: string;
+}
+
+/**
+ * Admin-mediated password reset: generates a new system password for a
+ * target user and sets it directly in Supabase Auth, bypassing the emailed
+ * recovery flow. The only recovery path for Physiotherapist/Receptionist,
+ * whose email may be a placeholder (AGENTS.md -> Password Policy). Needs no
+ * compensating action -- a single external write with no subsequent
+ * database step that could fail.
+ */
+export async function resetUserPassword(
+  supabase: SupabaseClient<Database>,
+  adminClient: SupabaseClient<Database>,
+  callerUserId: string,
+  targetUserId: string
+): Promise<ResetUserPasswordResult> {
+  const isAuthorized = await canManageTargetUser(supabase, callerUserId, targetUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  const targetUser = await findUserById(supabase, targetUserId);
+  if (!targetUser) {
+    throw new AppError("User not found", ErrorCodes.NOT_FOUND);
+  }
+
+  const initialPassword = generateInitialPassword();
+  await setUserPassword(adminClient, targetUser.id, initialPassword);
+
+  return {
+    userId: targetUser.id,
+    username: targetUser.username,
+    initialPassword,
+  };
 }
 
 /**

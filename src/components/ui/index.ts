@@ -19,3 +19,4 @@ export { DetailDrawer, type DetailDrawerProps } from "./detail-drawer";
 export { StatusBadge, type StatusBadgeProps } from "./status-badge";
 export { Can, useCan, type CanProps } from "./can";
 export { ForbiddenState, type ForbiddenStateProps } from "./forbidden-state";
+export { RevealOnce, type RevealOnceProps } from "./reveal-once";

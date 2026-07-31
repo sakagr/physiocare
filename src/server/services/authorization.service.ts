@@ -44,8 +44,36 @@ export function canManageRole(callerRole: AppRole, targetRole: AppRole): boolean
   return manageableRoles.includes(targetRole);
 }
 
+/**
+ * Resolves the set of roles the caller may assign -- to a newly created user,
+ * or as a target role in a role change. Caller-derived only (one lookup),
+ * never per-row: `canCreateUser`/`canUpdateUserRole`'s target-role check both
+ * reduce to exactly `ROLE_HIERARCHY[callerRole]`, so the same list serves
+ * both the create form and the change-role form's role picker.
+ */
+export async function getAssignableRoles(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<AppRole[]> {
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller) return [];
+
+  const roleRecord = await findRoleById(supabase, caller.role_id);
+  if (!roleRecord) return [];
+
+  return ROLE_HIERARCHY[roleRecord.name] ?? [];
+}
+
 /** Roles authorized for administrative management gates (org-admin tier). */
 const ORG_MANAGEMENT_ROLES: AppRole[] = ["ORG_OWNER", "ORG_ADMIN", "SUPER_ADMIN"];
+
+/**
+ * Roles authorized to view or set compensation. Narrower than
+ * `ORG_MANAGEMENT_ROLES` -- Owner-only (plus the SUPER_ADMIN platform
+ * override) on product/privacy grounds: compensation is Owner-scoped
+ * per UX.md, not Owner+Admin like general user management.
+ */
+const COMPENSATION_ROLES: AppRole[] = ["ORG_OWNER", "SUPER_ADMIN"];
 
 /** Platform roles authorized to activate/renew an organization's subscription. */
 const PLATFORM_BILLING_ROLES: AppRole[] = ["SUPER_ADMIN", "PLATFORM_BILLING"];
@@ -312,14 +340,33 @@ export async function canCorrectPackageSessionUsage(
 
 /**
  * Checks if a caller may set or update a user's compensation record.
- * ORG_OWNER/ORG_ADMIN only, matching the RLS insert/update policies on
- * user_compensations.
+ * ORG_OWNER only (plus SUPER_ADMIN) -- narrowed from the general
+ * ORG_MANAGEMENT_ROLES tier per UX.md's Owner-only scoping of compensation
+ * (ADR-0011). The RLS insert/update policies on user_compensations remain
+ * permissive (ORG_OWNER/ORG_ADMIN) as a backstop; this predicate, not RLS,
+ * is where the Owner-only boundary is enforced.
  */
 export async function canManageCompensation(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+  return hasAnyRole(supabase, callerUserId, COMPENSATION_ROLES);
+}
+
+/**
+ * Checks if a caller may view a user's compensation record/history.
+ * Same role set as `canManageCompensation` (ADR-0011) -- the RLS SELECT
+ * policy on user_compensations stays permissive to ORG_OWNER/ORG_ADMIN
+ * (do not narrow it: getCommissionReport reads through it under an Admin's
+ * own session, and RLS filters silently rather than erroring, so tightening
+ * it would make Admin-run commission reports report zero commission with
+ * no error).
+ */
+export async function canViewCompensation(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, COMPENSATION_ROLES);
 }
 
 /**

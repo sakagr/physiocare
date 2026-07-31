@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  assignableRoleSchema,
   clinicUsersResponseSchema,
   createOrganizationUserResultSchema,
+  manageableUserSchema,
+  resetUserPasswordResultSchema,
   userCompensationSchema,
+  userCompensationHistorySchema,
+  userDetailResponseSchema,
   userListResponseSchema,
   userSchema,
   userWithRoleSchema,
@@ -49,16 +54,45 @@ describe("userWithRoleSchema", () => {
   });
 });
 
+describe("assignableRoleSchema", () => {
+  it("parses a server-supplied assignable role pair (D9)", () => {
+    const fixture = { name: "ORG_PHYSIOTHERAPIST", display_name: "Physiotherapist" };
+    expect(assignableRoleSchema.parse(fixture)).toEqual(fixture);
+  });
+});
+
+describe("manageableUserSchema", () => {
+  it("parses a user-with-role plus the canManage hint (ADR-0010)", () => {
+    const fixture = { ...userFixture, role: roleFixture, canManage: true };
+    expect(manageableUserSchema.parse(fixture)).toEqual(fixture);
+  });
+});
+
+describe("userDetailResponseSchema", () => {
+  it("parses the user detail response (GET /api/users/{id})", () => {
+    const fixture = { ...userFixture, role: roleFixture, canManage: false };
+    expect(userDetailResponseSchema.parse(fixture)).toEqual(fixture);
+  });
+});
+
 describe("userListResponseSchema", () => {
-  it("parses the paginated user-with-role list (GET /api/users)", () => {
-    const fixture = { items: [{ ...userFixture, role: roleFixture }], total: 1, page: 1, pageSize: 10, totalPages: 1 };
+  it("parses the paginated manageable-user list plus assignableRoles (GET /api/users)", () => {
+    const fixture = {
+      items: [{ ...userFixture, role: roleFixture, canManage: true }],
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+      assignableRoles: [{ name: "ORG_PHYSIOTHERAPIST", display_name: "Physiotherapist" }],
+    };
     expect(userListResponseSchema.parse(fixture)).toEqual(fixture);
   });
 });
 
 describe("clinicUsersResponseSchema", () => {
-  it("parses a bare array of users (GET /api/clinics/{id}/users)", () => {
-    expect(clinicUsersResponseSchema.parse([userFixture])).toEqual([userFixture]);
+  it("parses a bare array of users with their embedded role (GET /api/clinics/{id}/users)", () => {
+    const fixture = [{ ...userFixture, role: roleFixture }];
+    expect(clinicUsersResponseSchema.parse(fixture)).toEqual(fixture);
   });
 });
 
@@ -74,19 +108,34 @@ describe("createOrganizationUserResultSchema", () => {
   });
 });
 
+const compensationFixture = {
+  id: "comp-1",
+  organization_id: "org-1",
+  user_id: "user-1",
+  type: "percentage",
+  value: 20,
+  effective_from: "2026-01-01",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  created_by: "user-owner",
+};
+
 describe("userCompensationSchema", () => {
   it("parses a compensation record (POST /api/users/{id}/compensation)", () => {
-    const fixture = {
-      id: "comp-1",
-      organization_id: "org-1",
-      user_id: "user-1",
-      type: "percentage",
-      value: 20,
-      effective_from: "2026-01-01",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-      created_by: "user-owner",
-    };
-    expect(userCompensationSchema.parse(fixture)).toEqual(fixture);
+    expect(userCompensationSchema.parse(compensationFixture)).toEqual(compensationFixture);
+  });
+});
+
+describe("userCompensationHistorySchema", () => {
+  it("parses a compensation history array, newest-first (GET /api/users/{id}/compensation, D2)", () => {
+    const fixture = [compensationFixture, { ...compensationFixture, id: "comp-0", effective_from: "2025-01-01" }];
+    expect(userCompensationHistorySchema.parse(fixture)).toEqual(fixture);
+  });
+});
+
+describe("resetUserPasswordResultSchema", () => {
+  it("parses the admin-mediated reset result, with initialPassword always present (POST /api/users/{id}/reset-password)", () => {
+    const fixture = { userId: "user-1", username: "ada", initialPassword: "Xk9!mPz2qwErTy1" };
+    expect(resetUserPasswordResultSchema.parse(fixture)).toEqual(fixture);
   });
 });

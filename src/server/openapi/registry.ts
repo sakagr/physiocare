@@ -82,9 +82,11 @@ import {
   clinicUsersResponseSchema,
   createOrganizationUserResultSchema,
   userCompensationSchema,
+  userCompensationHistorySchema,
+  userDetailResponseSchema,
   userListResponseSchema,
   userSchema,
-  userWithRoleSchema,
+  resetUserPasswordResultSchema,
 } from "@/contracts/user.contract";
 import { userClinicSchema } from "@/contracts/user-clinic.contract";
 import { currentUserSchema } from "@/contracts/me.contract";
@@ -1030,6 +1032,16 @@ const users: OperationEntry[] = [
     responses: [{ status: 200, description: "Clinic assignment list", schema: userClinicsResponseSchema }],
   },
   {
+    method: "GET",
+    path: "/api/users/{id}/compensation",
+    tag: "Users",
+    summary: "Get a user's compensation history",
+    description: "Owner-only (ADR-0011) -- returns the full history, newest-first (D2).",
+    auth: "session",
+    pathParams: [idParam("id", "User ID")],
+    responses: [{ status: 200, description: "Compensation history", schema: userCompensationHistorySchema }],
+  },
+  {
     method: "POST",
     path: "/api/users/{id}/compensation",
     tag: "Users",
@@ -1038,6 +1050,16 @@ const users: OperationEntry[] = [
     pathParams: [idParam("id", "User ID")],
     requestBody: { contentType: "application/json", schema: setUserCompensationSchema },
     responses: [{ status: 201, description: "Compensation record set", schema: userCompensationSchema }],
+  },
+  {
+    method: "POST",
+    path: "/api/users/{id}/reset-password",
+    tag: "Users",
+    summary: "Reset a user's password (admin-mediated)",
+    description: "The reveal-once initial password, regenerated. The only recovery path for roles with a placeholder email (Hole B).",
+    auth: "session",
+    pathParams: [idParam("id", "User ID")],
+    responses: [{ status: 200, description: "Password reset", schema: resetUserPasswordResultSchema }],
   },
   {
     method: "POST",
@@ -1053,9 +1075,10 @@ const users: OperationEntry[] = [
     path: "/api/users/{id}",
     tag: "Users",
     summary: "Get user details",
+    description: "Carries a server-computed `canManage` hint (ADR-0010).",
     auth: "session",
     pathParams: [idParam("id", "User ID")],
-    responses: [{ status: 200, description: "User detail", schema: userWithRoleSchema }],
+    responses: [{ status: 200, description: "User detail", schema: userDetailResponseSchema }],
   },
   {
     method: "PATCH",

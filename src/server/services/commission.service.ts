@@ -7,7 +7,7 @@ import { listUsageByAppointmentIds } from "../repositories/package-session-usage
 import { listPatientPackagesByIds } from "../repositories/patient-package.repository";
 import { listInvoicesByAppointmentIds } from "../repositories/invoice.repository";
 import { findUserById, findRoleById } from "../repositories/user.repository";
-import { canManageCompensation, canViewPhysiotherapistReports } from "./authorization.service";
+import { canManageCompensation, canViewCompensation, canViewPhysiotherapistReports } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { SetUserCompensationInput } from "../validators/compensation.validator";
 import { MAX_REPORT_ROWS } from "../validators/report.validator";
@@ -57,6 +57,36 @@ export async function setUserCompensation(
     effective_from: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
     created_by: callerUserId,
   });
+}
+
+/**
+ * Returns a user's full compensation history, newest-first (Owner-only,
+ * D2/ADR-0011). Reverses `listCompensationsByUser`'s ascending order rather
+ * than adding a new repository query -- that ascending order is load-bearing
+ * for `calculateCommission`'s effective-date resolution and must not change.
+ */
+export async function getUserCompensationHistory(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  targetUserId: string
+): Promise<UserCompensation[]> {
+  const isAuthorized = await canViewCompensation(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller || !caller.organization_id) {
+    throw new Error("Caller must belong to a valid organization");
+  }
+
+  const targetUser = await findUserById(supabase, targetUserId);
+  if (!targetUser || targetUser.organization_id !== caller.organization_id) {
+    throw new AppError("User not found", ErrorCodes.NOT_FOUND);
+  }
+
+  const compensationsAscending = await listCompensationsByUser(supabase, caller.organization_id, targetUserId);
+  return [...compensationsAscending].reverse();
 }
 
 /**

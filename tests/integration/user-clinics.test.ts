@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { createClinic, deleteClinic, assignUserToClinic, removeUserFromClinic } from "@/server/services/organization.service";
 import { findAssignmentsByClinic } from "@/server/repositories/user-clinic.repository";
+import { listClinicUsers } from "@/server/services/user-clinic.service";
 import { validClinicInput } from "../helpers/factories";
 import { describeIntegration, setupIntegrationContext } from "../helpers/integration-context";
 
@@ -15,6 +16,12 @@ describeIntegration("User-clinic assignments", () => {
 
     const first = await assignUserToClinic(ctx.admin, owner.id, employee.id, clinic.id);
     expect(first.deleted_at).toBeNull();
+
+    const members = await listClinicUsers(ctx.admin, owner.id, clinic.id);
+    expect(members).toEqual([
+      expect.objectContaining({ id: employee.id, role: expect.objectContaining({ name: "ORG_PHYSIOTHERAPIST" }) }),
+    ]);
+
     expect((await removeUserFromClinic(ctx.admin, owner.id, employee.id, clinic.id)).deleted_at).not.toBeNull();
     expect((await assignUserToClinic(ctx.admin, owner.id, employee.id, clinic.id)).id).toBe(first.id);
     await deleteClinic(ctx.admin, owner.id, clinic.id);

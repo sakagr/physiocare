@@ -11,7 +11,7 @@ import { findUserById } from "../repositories/user.repository";
 import { findClinicById } from "../repositories/clinic.repository";
 import { canViewUserClinicAssignments } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
-import type { User } from "../repositories/user.repository";
+import type { User, Role } from "../repositories/user.repository";
 import type { Clinic } from "../repositories/clinic.repository";
 
 /**
@@ -46,7 +46,7 @@ export async function listClinicUsers(
   supabase: SupabaseClient<Database>,
   callerUserId: string,
   clinicId: string
-): Promise<User[]> {
+): Promise<(User & { role: Role })[]> {
   const isAuthorized = await canViewUserClinicAssignments(supabase, callerUserId);
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);

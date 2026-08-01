@@ -588,6 +588,16 @@ The following rules apply:
 
 ---
 
+## Platform Role Reduction
+
+- **Scope:** Backend + docs — prerequisite for frontend phase F4.
+- **Context:** `PLATFORM_SUPPORT`, `PLATFORM_SALES`, and `PLATFORM_BILLING` were introduced in ADR-0009 (F2, API Explorer access control) as the platform namespace's operational roles, but never gained any capability beyond what `SUPER_ADMIN` already carries, and no UI was ever built for them (they reached `/platform/admin` only to be turned away by the API Explorer's `SUPER_ADMIN`-only gate). They are not part of the V1 product.
+- **Decision:** Remove all three roles entirely — from the `app_role` enum and `roles` seed, from every authorization predicate that named them (`ROLE_HIERARCHY`, `PLATFORM_BILLING_ROLES`, `canActivateSubscription`, `canManageSubscription`, `resolveGroup`'s `startsWith("PLATFORM_")` rule), and from every test and doc reference. No re-introduction path, placeholder, or "reserved for future use" note is kept anywhere — a later need is a later decision. The V1 role set is exactly `SUPER_ADMIN`, `ORG_OWNER`, `ORG_ADMIN`, `ORG_PHYSIOTHERAPIST`, `ORG_RECEPTIONIST`; all platform duties are `SUPER_ADMIN`'s. `PLATFORM_CAPABILITIES` and the platform/org group split are unchanged — `SUPER_ADMIN` remains the sole platform-group role and `platformApi:explore` is untouched.
+- **Consequences:** `canActivateSubscription`/`canManageSubscription` narrow to `SUPER_ADMIN`-only / `{ORG_OWNER, SUPER_ADMIN}` respectively; the "sales-assisted selection" branch `canManageSubscription` used to carry is dropped, not reworded, since it never had a real caller. `organizations_select_policy` and `organizations_update_policy` already admitted `is_super_admin()` unconditionally, so no RLS widening was needed for subscription activation/renewal — removing the roles closes what would otherwise have been a gap, rather than requiring new grants. The `users_select_policy` clause added in `20260728000000_users_select_self_read.sql` (`id = auth.uid()`, worked around a `NULL = NULL` self-read bug for platform roles other than `SUPER_ADMIN`) becomes dead code — every remaining platform-group user (`SUPER_ADMIN`) was always covered by the policy's `is_super_admin()` branch; left in place rather than removed as a drive-by cleanup. The `ApiExplorerPage`/`platform-admin-page` `ForbiddenState` fallback branch has no reachable real-role scenario left, but the `<Can>` gate and the capability check are kept as-is — the mechanism is cheap, correct, and harmless to leave in place even though nothing can currently trigger its negative branch. `organizations_update_policy`'s pre-existing `using`/`with check` disagreement (`with check` omits the `ORG_OWNER` role check `using` carries) was recreated verbatim as part of the enum-driven policy sweep this removal required — held, not fixed, since it's a functional change independent of role removal; whoever next recreates this policy for any reason inherits the same trap.
+- **Reference:** ADR-0009 (historical — its Consequences describe the three roles as reaching `/platform/admin`, and separately cite `tests/integration/me.test.ts` as pinning that all three receive no capabilities; that test was removed by this change. Both statements were accurate when written, neither describes current reality). `supabase/migrations/20260801000000_remove_platform_roles.sql`.
+
+---
+
 # User Identity & Authentication
 
 The application separates **user identity** from **authentication**.
@@ -609,9 +619,8 @@ Users are differentiated by their application role, which determines whether the
 Platform roles include:
 
 - `SUPER_ADMIN`
-- `PLATFORM_SUPPORT`
-- `PLATFORM_SALES`
-- `PLATFORM_BILLING`
+
+`SUPER_ADMIN` is the sole platform role in V1; all platform duties (support, sales, billing) are its responsibility. See the "Platform Role Reduction" entry in Project Decisions for why `PLATFORM_SUPPORT`/`PLATFORM_SALES`/`PLATFORM_BILLING` were removed.
 
 Organization roles include:
 
@@ -640,10 +649,10 @@ Examples:
 
 ```text
 SUPER_ADMIN
-PLATFORM_SUPPORT
 ORG_OWNER
 ORG_ADMIN
 ORG_PHYSIOTHERAPIST
+ORG_RECEPTIONIST
 ```
 
 System names:
@@ -1390,6 +1399,7 @@ Before a development phase is considered complete:
 
 - Implementation follows the approved architecture.
 - Database migrations are created and reviewed.
+- `src/types/database.ts` is regenerated against the migrated schema (`npm run db:types`) before any compile-time check below is run against it.
 - Validation schemas are implemented.
 - Repository layer is complete.
 - Service layer is complete.
@@ -1509,3 +1519,17 @@ Accepted frontend and UX ADRs, append-only and immutable per the ADR convention 
 - **Context:** `UX.md` (Screen Inventory and Flow 9) scopes the user compensation surface to Owner only, while general user management is Owner **and** Admin. Before F3, no authorization layer expressed this split: `canManageCompensation` (the only existing predicate touching `user_compensations`) is `hasAnyRole(ORG_MANAGEMENT_ROLES)` — identical to `canManageUsers` — and its own doc comment scopes it to *setting*, not viewing; there was no read predicate at all. The RLS SELECT policy on `user_compensations` admits `ORG_OWNER`/`ORG_ADMIN` (matching the write policies), which is the only "read" signal in the system prior to this phase, and it is the wrong layer to narrow: `getCommissionReport` → `calculateCommission` → `listCompensationsByUser` runs under the **caller's own session-scoped Supabase client** (`route-handler.ts` never passes an admin client), and this exact path is reachable by an Admin running the commission report (`canViewPhysiotherapistReports` admits Owner/Admin/Physio). If the SELECT policy were narrowed to Owner-only, RLS would filter rather than error: `listCompensationsByUser` would return an empty array for an Admin caller, and `calculateCommission` treats a missing compensation record identically to `type: "none"` — every Admin-run commission report would silently return `totalCommission: 0`, with no error and nothing in the UI to suggest the number is wrong.
 - **Decision:** Compensation visibility is Owner-only on product/privacy grounds (staff pay is more sensitive than general profile/role data), not derived from a consistency argument. A new `canViewCompensation` predicate and a narrowed `canManageCompensation` — both `hasAnyRole(["ORG_OWNER", "SUPER_ADMIN"])`, a `COMPENSATION_ROLES` set distinct from and narrower than `ORG_MANAGEMENT_ROLES` — gate `getUserCompensationHistory` (new: `GET /api/users/{id}/compensation`, full history newest-first) and `setUserCompensation` respectively. A new `compensation:view` capability token is added to `ORG_CAPABILITIES` only (not `PLATFORM_CAPABILITIES`) — `SUPER_ADMIN`'s predicate passes but it never receives the token, the same asymmetry `users:manage` already has for that role. **The RLS SELECT policy on `user_compensations` is deliberately left permissive to `ORG_OWNER`/`ORG_ADMIN`, unchanged.** The Owner-only boundary lives entirely in the new predicate and the client's `compensation:view` gate; RLS remains a backstop against direct data-layer access, not the enforcement point for this particular UX-level restriction.
 - **Consequences:** Any future change to `canManageCompensation` or its role set must re-verify `commission.service.ts:37`'s single caller and the RLS-narrowing trap described above before touching the SELECT policy — this ADR is the durable record of why that policy stays permissive, since the reasoning is not visible from the policy definition itself and a future contributor "tidying" it to match the narrowed predicate would silently zero every Admin-run commission report. `getUserCompensationHistory` reverses `listCompensationsByUser`'s existing ascending-by-`effective_from` order in-memory rather than adding a new repository query or changing the existing one's order, since `calculateCommission`'s effective-date resolution depends on that ascending order.
+
+## ADR-0012 — Organization-Profile Capability and Per-Call-Site Toast Suppression
+
+- **Status:** Accepted (2026-08-01)
+- **Scope:** Frontend / Authorization / Error Handling
+- **Context:** F4 needed two client-side mechanisms neither existing convention covered.
+
+  First, decision 4 of the F4 plan requires the Settings Organization tab to render editable for `ORG_OWNER`/`SUPER_ADMIN` and read-only for `ORG_ADMIN`, but the only existing capability token for this destination, `settings:manage`, admits all three and only gates *opening* Settings (`canManageOrganizationSettings`) — the same "coarse token can't express a narrower boundary" gap ADR-0011 hit for compensation viewing, now recurring for organization-profile editing.
+
+  Second, M6's dedicated limit-enforcement state (`UX.md` → *Error → default behavior*, "Limit / subscription enforcement" row) needed to replace the generic toast at exactly two call sites — `createOrganizationUser`/`createClinic`'s `ORGANIZATION_LIMIT_EXCEEDED`/`SUBSCRIPTION_REQUIRED` — while leaving the other five `SUBSCRIPTION_REQUIRED` sites (appointment, invoice, payment, patient-package ×2) on the flat toast, since F4 does not own those surfaces (`UX.md`'s F4 note on the enforcement table). `resolveQueryErrorAction`'s `ERROR_BEHAVIORS` map (`error-codes.ts`) is keyed by error **code**, not by call site — the cache-level `MutationCache.onError` that reads it fires identically for every mutation that throws a given code, with no way to know which screen it came from.
+- **Decision:** Two additions, following the precedent ADR-0009 and ADR-0011 set for the same class of change (a new capability token wired through the existing total map, in ADR-0009's case; a narrower predicate + token pair, in ADR-0011's).
+  1. **A new capability token**, `organization:manage`, added to `CAPABILITIES` (`me.contract.ts:29`) and wired through `CAPABILITY_PREDICATES`/`ORG_CAPABILITIES` in `me.service.ts:52,77`. Its predicate is `canUpdateOrganizationProfile` (`authorization.service.ts`, F4 M0-B) — `hasAnyRole(["ORG_OWNER", "SUPER_ADMIN"])`, deliberately narrower than `settings:manage`'s `canManageOrganizationSettings`. `OrganizationTab` (`src/features/organization/components/organization-tab.tsx`) gates on it via the existing `useCan` hook, no new mechanism.
+  2. **A `meta.suppressToastForCodes` opt-in on the mutation itself**, not a change to `ERROR_BEHAVIORS`. `MutationErrorMeta` (`error-policy.ts:73-74`) is an interface with one optional field, read by `resolveQueryErrorAction` (`error-policy.ts:81,88`) and threaded from `MutationCache`'s `onError` via `mutation.meta` (`query-client.ts:25,58`). `CreateUserDialog` and `ClinicFormDialog` set `meta: { suppressToastForCodes: LIMIT_ENFORCEMENT_CODES }` on their create mutations (`create-user-dialog.tsx:62`, `clinic-form-dialog.tsx:79`) and render `<LimitEnforcementState code={...} />` locally when `mutation.error` matches. **The `ERROR_BEHAVIORS` default for `SUBSCRIPTION_REQUIRED`/`ORGANIZATION_LIMIT_EXCEEDED` was deliberately left as `toast`, unchanged.** That map is global per code; flipping either entry to `none` (the shape `forbidden`/`inline` already use to opt out of the cache-level toast) would have silently killed toast feedback at the five out-of-scope call sites too, since they share the same code and the map has no per-caller dimension. The opt-in lives on the mutation, the one place that already knows which screen it is.
+- **Consequences:** Every mutation that does not set `meta.suppressToastForCodes` keeps the exact F3-era flat-toast behavior — proven by `query-client-error-dispatch.test.tsx`'s two pre-existing D8 tests passing unmodified, and by `query-error-policy.test.ts`'s explicit "still toasts a suppressed-elsewhere code when the caller did not opt in" case. Any future call site that wants the dedicated enforcement state instead of the flat toast sets the same `meta` field on its own mutation; it does not touch `ERROR_BEHAVIORS`, and does not need to — that map stays the correct default for every call site that has not opted out. A future contributor tempted to "simplify" by changing `ERROR_BEHAVIORS`' `SUBSCRIPTION_REQUIRED`/`ORGANIZATION_LIMIT_EXCEEDED` entries directly would silently regress the five sites F4 does not own; this ADR is the durable record of why that map was left alone.

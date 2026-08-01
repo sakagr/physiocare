@@ -21,6 +21,7 @@ import {
   canManageUsers,
   canManageClinics,
   canManageOrganizationSettings,
+  canUpdateOrganizationProfile,
   canManageSubscription,
   canViewAuditLogs,
   canExplorePlatformApi,
@@ -48,6 +49,7 @@ const CAPABILITY_PREDICATES: Record<
   "users:manage": canManageUsers,
   "clinics:manage": canManageClinics,
   "settings:manage": canManageOrganizationSettings,
+  "organization:manage": canUpdateOrganizationProfile,
   "subscription:manage": canManageSubscription,
   "auditLogs:view": canViewAuditLogs,
   "platformApi:explore": canExplorePlatformApi,
@@ -72,6 +74,7 @@ export const ORG_CAPABILITIES: readonly Capability[] = [
   "users:manage",
   "clinics:manage",
   "settings:manage",
+  "organization:manage",
   "subscription:manage",
   "auditLogs:view",
   "compensation:view",
@@ -89,9 +92,7 @@ export const PLATFORM_CAPABILITIES: readonly Capability[] = [
 
 /** The set of application roles that belong to the platform namespace. */
 function resolveGroup(roleName: string): UserGroup {
-  return roleName === "SUPER_ADMIN" || roleName.startsWith("PLATFORM_")
-    ? "platform"
-    : "org";
+  return roleName === "SUPER_ADMIN" ? "platform" : "org";
 }
 
 /**

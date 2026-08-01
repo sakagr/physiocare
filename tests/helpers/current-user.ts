@@ -46,17 +46,22 @@ const OWNER_CAPABILITIES: Capability[] = [
   "users:manage",
   "clinics:manage",
   "settings:manage",
+  "organization:manage",
   "subscription:manage",
   "auditLogs:view",
   "compensation:view",
 ];
 
 /**
- * Admin is Owner minus subscription management and compensation viewing --
- * both Owner-only per UX.md (compensation per D1/ADR-0011).
+ * Admin is Owner minus subscription management, organization-profile editing,
+ * and compensation viewing -- all Owner-only (subscription/profile per F4
+ * decision 4/M0-B, compensation per D1/ADR-0011).
  */
 const ADMIN_CAPABILITIES: Capability[] = OWNER_CAPABILITIES.filter(
-  (capability) => capability !== "subscription:manage" && capability !== "compensation:view"
+  (capability) =>
+    capability !== "subscription:manage" &&
+    capability !== "organization:manage" &&
+    capability !== "compensation:view"
 );
 
 const PHYSIO_CAPABILITIES: Capability[] = [
@@ -108,23 +113,6 @@ export const currentUserFixtures = {
       group: "platform",
       organization: null,
       capabilities: ["platformApi:explore"],
-      clinics: [],
-    }),
-
-  /**
-   * A platform operational role with no UI in V1 (UX.md). Reaches
-   * `/platform/admin` alongside SUPER_ADMIN because the namespace guard is
-   * group-level, but holds no capabilities -- this is the fixture that
-   * exercises the API Explorer's SUPER_ADMIN-only gate.
-   */
-  platformSupport: () =>
-    makeCurrentUser({
-      id: "user-platform-support",
-      fullName: "Pat Support",
-      role: { name: "PLATFORM_SUPPORT", displayName: "Platform Support" },
-      group: "platform",
-      organization: null,
-      capabilities: [],
       clinics: [],
     }),
 } as const;

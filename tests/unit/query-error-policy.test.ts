@@ -94,6 +94,36 @@ describe("resolveQueryErrorAction", () => {
     expect(action.type).toBe("toast");
     expect(action.message).toBe("Something went wrong. Please try again.");
   });
+
+  /**
+   * F4 M6: create-user/create-clinic opt out of the flat toast for exactly
+   * these two codes (their own dedicated limit-enforcement state renders
+   * instead) via mutation `meta`. Every mutation that doesn't set this meta
+   * keeps the F3-era flat toast -- proven by the no-meta cases above.
+   */
+  it("stays silent for a suppressed code when the caller opts in via meta", () => {
+    const action = resolveQueryErrorAction(new ApiError("Limit reached", 403, "ORGANIZATION_LIMIT_EXCEEDED"), {
+      suppressToastForCodes: ["ORGANIZATION_LIMIT_EXCEEDED", "SUBSCRIPTION_REQUIRED"],
+    });
+
+    expect(action.type).toBe("none");
+  });
+
+  it("still toasts a suppressed-elsewhere code when the caller did not opt in", () => {
+    const action = resolveQueryErrorAction(new ApiError("Limit reached", 403, "ORGANIZATION_LIMIT_EXCEEDED"));
+
+    expect(action.type).toBe("toast");
+  });
+
+  it("does not suppress an unrelated code even when the caller opts in", () => {
+    const action = resolveQueryErrorAction(new ApiError("Name taken", 409, "EMAIL_ALREADY_EXISTS"), {
+      suppressToastForCodes: ["ORGANIZATION_LIMIT_EXCEEDED"],
+    });
+
+    // EMAIL_ALREADY_EXISTS is `inline`, not `toast` -- already "none" for an
+    // unrelated reason, so this proves suppression didn't broaden anything.
+    expect(action.type).toBe("none");
+  });
 });
 
 describe("buildLoginRedirect", () => {

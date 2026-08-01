@@ -8,18 +8,31 @@ import { notifications } from "@mantine/notifications";
 import { Modal, Select, TextInput } from "@mantine/core";
 import { FormDialog, RevealOnce } from "@/components/ui";
 import { applyFieldErrors } from "@/lib/api/apply-field-errors";
+import { ApiError } from "@/lib/api/api-error";
+import { LimitEnforcementState, type LimitEnforcementCode } from "@/features/organization";
 import { createUser } from "../api";
 import { usersQueryKeys } from "../queries";
 import { createUserFormSchema, type CreateUserFormValues } from "../schemas";
+
+const LIMIT_ENFORCEMENT_CODES: LimitEnforcementCode[] = ["SUBSCRIPTION_REQUIRED", "ORGANIZATION_LIMIT_EXCEEDED"];
+
+function limitEnforcementCode(error: unknown): LimitEnforcementCode | null {
+  if (error instanceof ApiError && error.code && (LIMIT_ENFORCEMENT_CODES as string[]).includes(error.code)) {
+    return error.code as LimitEnforcementCode;
+  }
+  return null;
+}
 
 /**
  * Create user (UX.md → Flow 9 step 1): on success, swaps the dialog's body
  * into the reveal-once success state rather than closing and opening a
  * second dialog -- the initial password is part of this same command's
- * result, not a separate fetch. Per D8, a 402/403 (subscription/limit
- * enforcement) needs no bespoke handling here: the global mutation cache
- * already toasts it, and this dialog never calls `onClose` from `onError`,
- * so it stays open with the typed input intact by construction.
+ * result, not a separate fetch. A 402/403 (subscription/limit enforcement)
+ * renders the dedicated role-varying state (F4 M6, replacing F3's generic
+ * toast for this call site) via `meta.suppressToastForCodes` -- the global
+ * mutation cache no longer toasts these two codes for this mutation. The
+ * dialog never calls `onClose` from `onError`, so it stays open with the
+ * typed input intact either way.
  */
 export interface CreateUserDialogProps {
   opened: boolean;
@@ -46,6 +59,7 @@ export function CreateUserDialog({ opened, onClose, roleOptions }: CreateUserDia
   const mutation = useMutation({
     mutationFn: (values: CreateUserFormValues) =>
       createUser({ ...values, phone: values.phone || undefined }),
+    meta: { suppressToastForCodes: LIMIT_ENFORCEMENT_CODES },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: usersQueryKeys.all });
     },
@@ -56,6 +70,8 @@ export function CreateUserDialog({ opened, onClose, roleOptions }: CreateUserDia
       });
     },
   });
+
+  const enforcementCode = limitEnforcementCode(mutation.error);
 
   // Each opening starts clean -- a half-typed form or a stale reveal-once
   // result must never be waiting for whoever opens the dialog next.
@@ -106,6 +122,7 @@ export function CreateUserDialog({ opened, onClose, roleOptions }: CreateUserDia
       isDirty={isDirty}
       isSubmitting={mutation.isPending}
     >
+      {enforcementCode && <LimitEnforcementState code={enforcementCode} />}
       <TextInput label="Full name" error={errors.fullName?.message} {...register("fullName")} />
       <TextInput label="Username" error={errors.username?.message} {...register("username")} />
       <TextInput label="Email" type="email" error={errors.email?.message} {...register("email")} />

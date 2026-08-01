@@ -22,6 +22,33 @@ export const organizationSchema = z.object({
 });
 
 /**
+ * GET /api/organizations/{id} -- `OrganizationDetail` (`organization.service.ts`).
+ * `subscription` is null for a caller who may open Settings but not manage
+ * the subscription (ORG_ADMIN) -- see the service's own doc comment.
+ */
+export const organizationDetailSchema = z.object({
+  id: z.string(),
+  organizationName: z.string(),
+  defaultCurrencyCode: z.string().nullable(),
+  status: z.enum(["draft", "active", "inactive", "archived"]),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  subscription: z
+    .object({
+      planId: z.string(),
+      planName: z.string(),
+      status: z.enum(["inactive", "trialing", "active", "past_due", "cancelled", "expired"]),
+      startsAt: z.string().nullable(),
+      endsAt: z.string().nullable(),
+      usage: z.object({
+        clinics: z.object({ used: z.number(), max: z.number() }),
+        users: z.object({ used: z.number(), max: z.number() }),
+      }),
+    })
+    .nullable(),
+});
+
+/**
  * POST /api/organizations/bootstrap -- `BootstrapOrganizationResult`
  * (`organization.service.ts`). No initial password here: the owner is
  * invited by email (ADR-0007's invite flow), not handed a system-generated

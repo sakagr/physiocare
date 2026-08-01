@@ -1,3 +1,4 @@
+import type { ErrorCode } from "@/server/errors";
 import { ApiError } from "@/lib/api/api-error";
 import { resolveErrorBehavior } from "@/lib/api/error-codes";
 
@@ -62,15 +63,31 @@ export function shouldRetryQuery(
 }
 
 /**
+ * Opt-in per-mutation escape hatch from the default `toast` behavior, for a
+ * screen that renders its own dedicated surface for specific codes instead
+ * (F4 M6: create-user/create-clinic's role-varying limit-enforcement state,
+ * for `ORGANIZATION_LIMIT_EXCEEDED`/`SUBSCRIPTION_REQUIRED` only). Every
+ * mutation that does not set this keeps the F3-era flat toast unchanged --
+ * this is additive, not a replacement for the default.
+ */
+export interface MutationErrorMeta {
+  suppressToastForCodes?: readonly ErrorCode[];
+}
+
+/**
  * Decides what the cache-level handler should do with a failure, reusing the
  * Increment-1 code→behavior map so the copy stays in one place.
  */
-export function resolveQueryErrorAction(error: unknown): QueryErrorAction {
+export function resolveQueryErrorAction(error: unknown, meta?: MutationErrorMeta): QueryErrorAction {
   if (!(error instanceof ApiError)) {
     return { type: "toast", message: "Something went wrong. Please try again." };
   }
 
   const { behavior, message } = resolveErrorBehavior(error);
+
+  if (behavior === "toast" && error.code && meta?.suppressToastForCodes?.includes(error.code as ErrorCode)) {
+    return { type: "none", message };
+  }
 
   switch (behavior) {
     case "redirectLogin":

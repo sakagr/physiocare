@@ -5,6 +5,7 @@ import {
   buildLoginRedirect,
   resolveQueryErrorAction,
   shouldRetryQuery,
+  type MutationErrorMeta,
 } from "./error-policy";
 
 /**
@@ -21,8 +22,8 @@ const STALE_TIME_MS = 60_000;
  * cache callback, outside React, so navigation uses a full location change
  * rather than a router the callback has no access to.
  */
-function dispatchErrorAction(error: unknown): void {
-  const action = resolveQueryErrorAction(error);
+function dispatchErrorAction(error: unknown, meta?: MutationErrorMeta): void {
+  const action = resolveQueryErrorAction(error, meta);
 
   if (action.type === "none") {
     return;
@@ -51,8 +52,11 @@ function dispatchErrorAction(error: unknown): void {
  */
 export function createErrorDispatchCaches(): Pick<QueryClientConfig, "queryCache" | "mutationCache"> {
   return {
-    queryCache: new QueryCache({ onError: dispatchErrorAction }),
-    mutationCache: new MutationCache({ onError: dispatchErrorAction }),
+    queryCache: new QueryCache({ onError: (error) => dispatchErrorAction(error) }),
+    mutationCache: new MutationCache({
+      onError: (error, _variables, _onMutateResult, mutation) =>
+        dispatchErrorAction(error, mutation.meta as MutationErrorMeta | undefined),
+    }),
   };
 }
 

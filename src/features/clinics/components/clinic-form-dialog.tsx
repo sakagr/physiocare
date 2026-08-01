@@ -8,16 +8,29 @@ import { notifications } from "@mantine/notifications";
 import { TextInput } from "@mantine/core";
 import { FormDialog } from "@/components/ui";
 import { applyFieldErrors } from "@/lib/api/apply-field-errors";
+import { ApiError } from "@/lib/api/api-error";
+import { LimitEnforcementState, type LimitEnforcementCode } from "@/features/organization";
 import { createClinic, updateClinic } from "../api";
 import { clinicsQueryKeys } from "../queries";
 import { clinicFormSchema, EMPTY_CLINIC_FORM_VALUES, type ClinicFormValues } from "../schemas";
+
+const LIMIT_ENFORCEMENT_CODES: LimitEnforcementCode[] = ["SUBSCRIPTION_REQUIRED", "ORGANIZATION_LIMIT_EXCEEDED"];
+
+function limitEnforcementCode(error: unknown): LimitEnforcementCode | null {
+  if (error instanceof ApiError && error.code && (LIMIT_ENFORCEMENT_CODES as string[]).includes(error.code)) {
+    return error.code as LimitEnforcementCode;
+  }
+  return null;
+}
 
 /**
  * Create/edit clinic (UX.md → Flow 10 step 1). One dialog for both --
  * `clinicId` present means edit. `ORGANIZATION_NAME_ALREADY_EXISTS` is what
  * the duplicate-name conflict throws on this domain too (readiness review
  * §2), mapped onto `clinicName` here rather than the default clinic-blind
- * copy.
+ * copy. Only the create path can hit `SUBSCRIPTION_REQUIRED`/
+ * `ORGANIZATION_LIMIT_EXCEEDED`, which render the dedicated role-varying
+ * state (F4 M6) instead of the F3-era generic toast.
  */
 export interface ClinicFormDialogProps {
   opened: boolean;
@@ -63,6 +76,7 @@ export function ClinicFormDialog({ opened, onClose, clinicId, defaultValues }: C
       };
       return clinicId ? updateClinic(clinicId, input) : createClinic(input);
     },
+    meta: { suppressToastForCodes: LIMIT_ENFORCEMENT_CODES },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: clinicsQueryKeys.all });
       if (clinicId) {
@@ -78,6 +92,8 @@ export function ClinicFormDialog({ opened, onClose, clinicId, defaultValues }: C
     },
   });
 
+  const enforcementCode = limitEnforcementCode(mutation.error);
+
   return (
     <FormDialog
       opened={opened}
@@ -88,6 +104,7 @@ export function ClinicFormDialog({ opened, onClose, clinicId, defaultValues }: C
       isDirty={isDirty}
       isSubmitting={mutation.isPending}
     >
+      {enforcementCode && <LimitEnforcementState code={enforcementCode} />}
       <TextInput label="Clinic name" error={errors.clinicName?.message} {...register("clinicName")} />
       <TextInput label="Email" type="email" error={errors.email?.message} {...register("email")} />
       <TextInput label="Phone" error={errors.phone?.message} {...register("phone")} />

@@ -7,14 +7,18 @@ import type { CreateOrganizationInput } from "../validators/organization.validat
 import type { CreateOrganizationUserInput } from "../validators/user.validator";
 import {
   findOrganizationByName,
+  findOrganizationById,
   insertOrganization,
   updateOrganizationCreatedBy,
+  updateOrganizationProfile as updateOrganizationProfileInternal,
   updateOrganizationStatus,
 } from "../repositories/organization.repository";
-import { findSubscriptionPlanByName } from "../repositories/subscription.repository";
+import type { Organization } from "../repositories/organization.repository";
+import type { UpdateOrganizationProfileInput } from "../validators/organization.validator";
+import { findSubscriptionPlanByName, findSubscriptionPlanById } from "../repositories/subscription.repository";
 import { inviteUser, deleteUser, generateInitialPassword, createAuthUser, setUserDisabled, setUserEnabled, setUserPassword } from "./auth.service";
 import type { AppRole, UpdateUser, User } from "../repositories/user.repository";
-import { findUserById, updateUser, findRoleByName } from "../repositories/user.repository";
+import { findUserById, updateUser, findRoleByName, countUsers } from "../repositories/user.repository";
 import {
   createOrganizationOwner,
   ensureUsernameAvailable,
@@ -30,9 +34,13 @@ import {
   canOrganizationTransact,
   canCreateClinicWithinLimit,
   canCreateUserWithinLimit,
+  canUpdateOrganizationProfile as canUpdateOrganizationProfilePredicate,
+  canManageOrganizationSettings,
+  canManageSubscription,
 } from "./authorization.service";
+import { recordAuditLog } from "./audit-log.service";
 import type { CreateClinicInput, UpdateClinicInput } from "../validators/clinic.validator";
-import { findClinicByNameInOrg, findClinicById, type Clinic } from "../repositories/clinic.repository";
+import { findClinicByNameInOrg, findClinicById, countClinics, type Clinic } from "../repositories/clinic.repository";
 import { createClinicInternal, updateClinicInternal } from "./clinic.service";
 import type { UserClinic } from "../repositories/user-clinic.repository";
 import { upsertAssignmentInternal, deleteAssignmentInternal } from "./user-clinic.service";
@@ -137,9 +145,151 @@ export interface CreateOrganizationUserResult {
   initialPassword?: string;
 }
 
+export interface OrganizationDetailSubscription {
+  planId: string;
+  planName: string;
+  status: Database["public"]["Enums"]["subscription_status"];
+  startsAt: string | null;
+  endsAt: string | null;
+  usage: {
+    clinics: { used: number; max: number };
+    users: { used: number; max: number };
+  };
+}
+
+export interface OrganizationDetail {
+  id: string;
+  organizationName: string;
+  defaultCurrencyCode: string | null;
+  status: Database["public"]["Enums"]["organization_status"];
+  createdAt: string;
+  updatedAt: string;
+  /**
+   * null for a caller who may open Settings (`canManageOrganizationSettings`)
+   * but not manage the subscription (`canManageSubscription`) -- ORG_ADMIN
+   * sees the Organization tab only, per UX.md's Owner/SUPER_ADMIN-only
+   * Subscription tab. Projected in the response rather than a second
+   * endpoint/predicate pair.
+   */
+  subscription: OrganizationDetailSubscription | null;
+}
+
+/**
+ * Reads an organization's profile, plus its subscription/usage snapshot
+ * when the caller is also authorized to manage the subscription.
+ */
+export async function getOrganizationDetail(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  organizationId: string
+): Promise<OrganizationDetail> {
+  const isAuthorized = await canManageOrganizationSettings(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller) {
+    throw new Error("Caller not found");
+  }
+
+  const organization = await findOrganizationById(supabase, organizationId);
+  if (!organization) {
+    throw new AppError("Organization not found", ErrorCodes.NOT_FOUND);
+  }
+
+  if (caller.organization_id !== null && caller.organization_id !== organizationId) {
+    throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
+  }
+
+  let subscription: OrganizationDetailSubscription | null = null;
+  const canSeeSubscription = await canManageSubscription(supabase, callerUserId);
+  if (canSeeSubscription) {
+    const plan = await findSubscriptionPlanById(supabase, organization.subscription_plan_id);
+    if (!plan) {
+      throw new Error("Organization references a subscription plan that no longer exists");
+    }
+
+    const [clinicsUsed, usersUsed] = await Promise.all([
+      countClinics(supabase, organizationId, {}),
+      countUsers(supabase, organizationId, {}),
+    ]);
+
+    subscription = {
+      planId: plan.id,
+      planName: plan.plan_name,
+      status: organization.subscription_status,
+      startsAt: organization.subscription_starts_at,
+      endsAt: organization.subscription_ends_at,
+      usage: {
+        clinics: { used: clinicsUsed, max: plan.max_clinics },
+        users: { used: usersUsed, max: plan.max_users },
+      },
+    };
+  }
+
+  return {
+    id: organization.id,
+    organizationName: organization.organization_name,
+    defaultCurrencyCode: organization.default_currency_code,
+    status: organization.status,
+    createdAt: organization.created_at,
+    updatedAt: organization.updated_at,
+    subscription,
+  };
+}
+
+/**
+ * Updates an organization's profile (name, default currency). Scoped to
+ * these two fields only -- subscription fields go through
+ * subscription.service.ts's own workflow, never this path.
+ */
+export async function updateOrganizationProfile(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  organizationId: string,
+  input: UpdateOrganizationProfileInput
+): Promise<Organization> {
+  const isAuthorized = await canUpdateOrganizationProfilePredicate(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  const caller = await findUserById(supabase, callerUserId);
+  if (!caller) {
+    throw new Error("Caller not found");
+  }
+
+  const organization = await findOrganizationById(supabase, organizationId);
+  if (!organization) {
+    throw new AppError("Organization not found", ErrorCodes.NOT_FOUND);
+  }
+
+  if (caller.organization_id !== null && caller.organization_id !== organizationId) {
+    throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
+  }
+
+  const updated = await updateOrganizationProfileInternal(supabase, organizationId, {
+    organization_name: input.organizationName,
+    default_currency_code: input.defaultCurrencyCode,
+  });
+
+  await recordAuditLog(supabase, {
+    organizationId,
+    userId: caller.organization_id === organizationId ? callerUserId : null,
+    action: "organization_profile_updated",
+    entityName: "organizations",
+    entityId: organizationId,
+    oldData: { organization_name: organization.organization_name, default_currency_code: organization.default_currency_code },
+    newData: { organization_name: updated.organization_name, default_currency_code: updated.default_currency_code },
+  });
+
+  return updated;
+}
+
 /**
  * Orchestrates the onboarding flow for a new organization user.
- * 
+ *
  * Flow:
  * 1. Resolves the creator profile to get their organization ID and verify non-null.
  * 2. Checks username and email availability.

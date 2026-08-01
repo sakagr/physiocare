@@ -193,7 +193,7 @@ People and locations.
 
 ---
 
-# Phase F4 – Org: Setup & Subscription
+# Phase F4 – Org: Setup & Subscription ✅
 
 Organization control surface.
 

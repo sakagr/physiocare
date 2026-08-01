@@ -6,7 +6,7 @@ import {
   updateOrganizationSubscription,
   listOrganizationsByLapseCriteria,
 } from "../repositories/organization.repository";
-import { findSubscriptionPlanByName, findSubscriptionPlanById } from "../repositories/subscription.repository";
+import { findSubscriptionPlanByName, findSubscriptionPlanById, listSubscriptionPlans, type SubscriptionPlan } from "../repositories/subscription.repository";
 import { findUserById, findRoleById } from "../repositories/user.repository";
 import { canManageSubscription, canActivateSubscription } from "./authorization.service";
 import { recordAuditLog } from "./audit-log.service";
@@ -56,11 +56,11 @@ export function isLegalSubscriptionTransition(from: SubscriptionStatus, to: Subs
 /**
  * audit_logs.user_id has a composite FK requiring (organization_id, user_id)
  * to resolve to a real user row in that organization -- fine for
- * self-service actions, but a platform billing role activating/renewing a
- * subscription doesn't belong to the organization being acted on at all.
- * Passing null satisfies the FK (a null column is exempt from a composite
- * FK check) and is the correct representation of "a platform actor, not an
- * organization member, performed this."
+ * self-service actions, but SUPER_ADMIN activating/renewing a subscription
+ * doesn't belong to the organization being acted on at all. Passing null
+ * satisfies the FK (a null column is exempt from a composite FK check) and
+ * is the correct representation of "a platform actor, not an organization
+ * member, performed this."
  */
 async function resolveAuditActorUserId(
   supabase: SupabaseClient<Database>,
@@ -69,6 +69,23 @@ async function resolveAuditActorUserId(
 ): Promise<string | null> {
   const caller = await findUserById(supabase, callerUserId);
   return caller?.organization_id === organizationId ? callerUserId : null;
+}
+
+/**
+ * Lists the plan catalog available for self-service selection. Gated by
+ * `canManageSubscription` (ORG_OWNER/SUPER_ADMIN) -- the same role set that
+ * may call `selectSubscriptionPlan`, since this is what populates the
+ * selection screen for them.
+ */
+export async function listSelectableSubscriptionPlans(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<SubscriptionPlan[]> {
+  const isAuthorized = await canManageSubscription(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+  return listSubscriptionPlans(supabase);
 }
 
 /**
@@ -81,7 +98,7 @@ async function resolveAuditActorUserId(
  *
  * Selecting any other (paid) plan sets subscription_plan_id only --
  * subscription_status is deliberately left at "inactive" (still
- * non-transacting) until a platform billing role calls
+ * non-transacting) until SUPER_ADMIN calls
  * activateOrganizationSubscription(). No payment automation exists in this
  * codebase, so a paid plan is never auto-activated by self-service
  * selection alone.
@@ -173,7 +190,7 @@ export async function selectSubscriptionPlan(
 /**
  * Activates a previously-selected paid plan (or converts an active trial to
  * paid), setting subscription_status = "active" with a billing cycle
- * window. Platform billing roles only.
+ * window. SUPER_ADMIN only.
  */
 export async function activateOrganizationSubscription(
   supabase: SupabaseClient<Database>,
@@ -238,8 +255,8 @@ export async function activateOrganizationSubscription(
  * Renews an organization's subscription for another billing cycle. Extends
  * subscription_ends_at from its *current* value (not from now), so an early
  * renewal never loses already-paid time. If the organization had lapsed
- * into past_due, this also recovers it back to active. Platform billing
- * roles only, same as activation.
+ * into past_due, this also recovers it back to active. SUPER_ADMIN only,
+ * same as activation.
  */
 export async function renewOrganizationSubscription(
   supabase: SupabaseClient<Database>,

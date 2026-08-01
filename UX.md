@@ -114,7 +114,7 @@ Items sit in three groups — **Clinical**, **Billing & Catalog**, and **Adminis
 | Audit Log | Administration | ● | ● | — | — |
 
 ¹ Physiotherapists see only their own physiotherapist report tab; billing and commission tabs are gated out.
-² The Subscription tab within Settings is Owner-only; Admin sees Organization settings only.
+² The Subscription tab within Settings is Owner-only; Admin sees the Organization tab only, and read-only there -- only Owner (and SUPER_ADMIN) may edit the organization profile (F4).
 
 Non-manager roles get a deliberately short nav: **Physio** — Dashboard, Patients, Packages, Reports; **Reception** — Dashboard, Patients, Invoices, Packages. Packages is view-only for both (catalog management is Owner/Admin). Their high-frequency work (a physio's day, reception's scheduling and billing) runs through the Dashboard widget/quick actions and the patient workspace, not extra nav items.
 
@@ -310,7 +310,7 @@ Reading these tables:
 - **Routes are provisional.** Final paths are settled in the Sitemap and Navigation Model sections.
 - **Role tags are advisory.** They indicate who a surface is primarily *for*, to guide navigation and layout — not an authorization spec. Access is enforced server-side and surfaced to the client as a capability map (`GET /api/users/me`) per the `AGENTS.md` client-authorization model. The same feature area renders and permits differently per role.
 
-Role key: **SA** = Super Admin · **Owner** = Org Owner · **Admin** = Org Admin · **Physio** = Physiotherapist · **Reception** = Receptionist · **All** = all four org roles. Platform operational roles (`PLATFORM_SUPPORT`, `PLATFORM_SALES`, `PLATFORM_BILLING`) exist in the data model but have no UI in V1.
+Role key: **SA** = Super Admin · **Owner** = Org Owner · **Admin** = Org Admin · **Physio** = Physiotherapist · **Reception** = Receptionist · **All** = all four org roles.
 
 ## Shared Front Door — `(auth)`
 
@@ -440,6 +440,8 @@ The API returns `{ error, code }` for coded errors, `{ error, details }` for 400
 | Unexpected error | 500 · internal, network failure | Toast "Something went wrong" with a retry; error logged. Handled globally. |
 
 **F3 note:** the create-user and create-clinic dialogs do not yet build the dedicated enforcement state above — they use the generic 402/403 toast (this table's default), with no per-screen message and no Owner/other-role distinction, and the dialog simply stays open with input intact. This is a deliberate interim, not an oversight: F4 owns *Subscription Plan Selection*, *Activation & Renewal*, and *Limit Enforcement States*, and replaces this generic toast with the role-varying dedicated state described above.
+
+**F4 note:** the dedicated enforcement state above is built and adopted at exactly two of the seven call sites that can throw `SUBSCRIPTION_REQUIRED` — create-user and create-clinic (`organization.service.ts`), which are also the only two `ORGANIZATION_LIMIT_EXCEEDED` sites. The remaining five `SUBSCRIPTION_REQUIRED` sites (`appointment.service.ts`, `invoice.service.ts`, `payment.service.ts`, `patient-package.service.ts` ×2) still use the F3-era generic toast, unchanged. This is a deliberate scope boundary, not an oversight: F4 owns the component and its first adoption; F5–F7 adopt it at the appointment, invoice/payment, and patient-package surfaces they each build.
 
 ## Mutation feedback
 

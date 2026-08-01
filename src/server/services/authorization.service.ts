@@ -19,9 +19,6 @@ import { countUsers } from "../repositories/user.repository";
  */
 const ROLE_HIERARCHY: Record<AppRole, AppRole[]> = {
   SUPER_ADMIN: [], // Platform admin has full access bypass and doesn't participate in org hierarchy.
-  PLATFORM_SUPPORT: [],
-  PLATFORM_SALES: [],
-  PLATFORM_BILLING: [],
   ORG_OWNER: [
     "ORG_OWNER",
     "ORG_ADMIN",
@@ -74,9 +71,6 @@ const ORG_MANAGEMENT_ROLES: AppRole[] = ["ORG_OWNER", "ORG_ADMIN", "SUPER_ADMIN"
  * per UX.md, not Owner+Admin like general user management.
  */
 const COMPENSATION_ROLES: AppRole[] = ["ORG_OWNER", "SUPER_ADMIN"];
-
-/** Platform roles authorized to activate/renew an organization's subscription. */
-const PLATFORM_BILLING_ROLES: AppRole[] = ["SUPER_ADMIN", "PLATFORM_BILLING"];
 
 /** Roles authorized for front-desk-level management gates (org-admin tier plus receptionist). */
 const ORG_FRONT_DESK_ROLES: AppRole[] = [
@@ -148,9 +142,8 @@ export async function canBootstrapOrganization(
 
 /**
  * Verifies if a user is authorized to use the platform API explorer
- * (F2). SUPER_ADMIN only, per UX.md -- the platform operational roles
- * (`PLATFORM_SUPPORT`, `PLATFORM_SALES`, `PLATFORM_BILLING`) reach the
- * platform namespace but have no UI in V1 and must not reach this one.
+ * (F2). SUPER_ADMIN only, per UX.md -- SUPER_ADMIN is the sole
+ * platform-group role in V1; all platform duties are its responsibility.
  */
 export async function canExplorePlatformApi(
   supabase: SupabaseClient<Database>,
@@ -390,28 +383,27 @@ export async function canOrganizationTransact(
 
 /**
  * Checks if a caller may select a subscription plan for an organization.
- * ORG_OWNER may select for their own organization (self-service); platform
- * billing roles may select on behalf of any organization (sales-assisted
- * selection). The service layer enforces which organization a non-platform
- * caller may target.
+ * ORG_OWNER may select for their own organization (self-service); SUPER_ADMIN
+ * may select on behalf of any organization. The service layer enforces which
+ * organization a non-platform caller may target.
  */
 export async function canManageSubscription(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  return hasAnyRole(supabase, callerUserId, ["ORG_OWNER", ...PLATFORM_BILLING_ROLES]);
+  return hasAnyRole(supabase, callerUserId, ["ORG_OWNER", "SUPER_ADMIN"]);
 }
 
 /**
  * Checks if a caller may activate or renew an organization's subscription.
- * Platform billing roles only -- unlike plan selection, this is never
- * self-service (no payment automation exists in this codebase yet).
+ * SUPER_ADMIN only -- never self-service (no payment automation exists in
+ * this codebase yet).
  */
 export async function canActivateSubscription(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  return hasAnyRole(supabase, callerUserId, PLATFORM_BILLING_ROLES);
+  return hasRole(supabase, callerUserId, "SUPER_ADMIN");
 }
 
 /**
@@ -1078,14 +1070,32 @@ export async function canOverseeAttendance(
 
 /**
  * Checks if a caller may open Organization Settings (organization profile).
- * Owner/Admin tier. The Subscription tab within Settings is further gated by
- * `canManageSubscription` (Owner only).
+ * Owner/Admin tier -- gates *opening* the destination only. The Subscription
+ * tab within Settings is further gated by `canManageSubscription`
+ * (ORG_OWNER/SUPER_ADMIN), and editing the profile fields themselves by the
+ * narrower `canUpdateOrganizationProfile` (ORG_OWNER/SUPER_ADMIN) -- ORG_ADMIN
+ * opens Settings but sees a read-only profile form and no Subscription tab.
  */
 export async function canManageOrganizationSettings(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
   return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
+}
+
+/**
+ * Checks if a caller may edit the organization profile (name, default
+ * currency). Deliberately narrower than `canManageOrganizationSettings`
+ * (which also admits ORG_ADMIN and only gates opening the Settings
+ * destination) -- ORG_ADMIN sees a read-only profile form. Matches
+ * `organizations_update_policy`, which already admits exactly ORG_OWNER and
+ * SUPER_ADMIN.
+ */
+export async function canUpdateOrganizationProfile(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ["ORG_OWNER", "SUPER_ADMIN"]);
 }
 
 /**

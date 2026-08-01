@@ -35,6 +35,32 @@ export async function updateOrganizationSubscription(
 }
 
 /**
+ * Updates an organization's profile fields (name, default currency).
+ *
+ * @param supabase - The Supabase client (can be client, server, or admin).
+ * @param organizationId - The ID of the organization to update.
+ * @param profile - The profile fields to update.
+ * @returns The updated organization.
+ */
+export async function updateOrganizationProfile(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  profile: Pick<UpdateOrganization, "organization_name" | "default_currency_code">
+): Promise<Organization> {
+  const { data, error } = await supabase
+    .from("organizations")
+    .update(profile)
+    .eq("id", organizationId)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Finds an organization by its unique name.
  * 
  * @param supabase - The Supabase client (can be client, server, or admin).

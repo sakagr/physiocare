@@ -14,7 +14,7 @@ import {
   validPrescriptionInput,
 } from "../helpers/factories";
 import { validateCreateClinicInput, validateUpdateClinicInput } from "@/server/validators/clinic.validator";
-import { validateCreateOrganizationInput } from "@/server/validators/organization.validator";
+import { validateCreateOrganizationInput, validateUpdateOrganizationProfileInput } from "@/server/validators/organization.validator";
 import { getPaginationBounds, sharedListQuerySchema } from "@/server/validators/shared.validator";
 import { validateAssignUserClinicInput } from "@/server/validators/user-clinic.validator";
 import {
@@ -55,6 +55,21 @@ describe("organization validator", () => {
     expect(() => validateCreateOrganizationInput({})).toThrow();
     expect(() => validateCreateOrganizationInput({ ...validOrganizationInput(), adminEmail: "not-an-email" })).toThrow();
     expect(() => validateCreateOrganizationInput({ ...validOrganizationInput(), organizationName: "x" })).toThrow();
+  });
+});
+
+describe("organization profile validator", () => {
+  it("accepts an empty partial update and a fully-populated one", () => {
+    expect(validateUpdateOrganizationProfileInput({})).toEqual({});
+    expect(
+      validateUpdateOrganizationProfileInput({ organizationName: "  Acme Health  ", defaultCurrencyCode: "USD" })
+    ).toEqual({ organizationName: "Acme Health", defaultCurrencyCode: "USD" });
+  });
+
+  it("rejects an undersized name and a malformed currency code", () => {
+    expect(() => validateUpdateOrganizationProfileInput({ organizationName: "x" })).toThrow();
+    expect(() => validateUpdateOrganizationProfileInput({ defaultCurrencyCode: "usd" })).toThrow();
+    expect(() => validateUpdateOrganizationProfileInput({ defaultCurrencyCode: "US" })).toThrow();
   });
 });
 

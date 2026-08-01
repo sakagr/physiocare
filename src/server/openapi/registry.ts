@@ -47,7 +47,7 @@ import {
   activateSubscriptionSchema,
   selectSubscriptionPlanSchema,
 } from "@/server/validators/subscription.validator";
-import { createOrganizationSchema } from "@/server/validators/organization.validator";
+import { createOrganizationSchema, updateOrganizationProfileSchema } from "@/server/validators/organization.validator";
 import {
   createPackageSchema,
   updatePackageSchema,
@@ -113,9 +113,10 @@ import {
   commissionReportSchema,
   physiotherapistReportSchema,
 } from "@/contracts/report.contract";
-import { bootstrapOrganizationResultSchema, organizationSchema } from "@/contracts/organization.contract";
+import { bootstrapOrganizationResultSchema, organizationDetailSchema, organizationSchema } from "@/contracts/organization.contract";
 import { notificationListResponseSchema, notificationSchema } from "@/contracts/notification.contract";
 import { auditLogListResponseSchema } from "@/contracts/audit-log.contract";
+import { subscriptionPlanListResponseSchema } from "@/contracts/subscription.contract";
 
 /** A UUID path parameter, the overwhelming majority of this API's `{id}`s. */
 function idParam(name: string, description: string): { name: string; description: string; required: true; schema: z.ZodType } {
@@ -582,11 +583,32 @@ const notifications: OperationEntry[] = [
 // ---------------------------------------------------------------------------
 const organizations: OperationEntry[] = [
   {
+    method: "GET",
+    path: "/api/organizations/{id}",
+    tag: "Organizations",
+    summary: "Get an organization's profile and subscription detail",
+    description: "Any caller who may open Organization Settings (ORG_OWNER/ORG_ADMIN/SUPER_ADMIN). `subscription` is null unless the caller may also manage the subscription (ORG_OWNER/SUPER_ADMIN) -- projected per caller rather than a second endpoint.",
+    auth: "session",
+    pathParams: [idParam("id", "Organization ID")],
+    responses: [{ status: 200, description: "Organization detail", schema: organizationDetailSchema }],
+  },
+  {
+    method: "PATCH",
+    path: "/api/organizations/{id}",
+    tag: "Organizations",
+    summary: "Update an organization's profile",
+    description: "ORG_OWNER (own organization) or SUPER_ADMIN only. Scoped to organization_name and default_currency_code -- subscription fields go through the dedicated subscription endpoints below.",
+    auth: "session",
+    pathParams: [idParam("id", "Organization ID")],
+    requestBody: { contentType: "application/json", schema: updateOrganizationProfileSchema },
+    responses: [{ status: 200, description: "Organization profile updated", schema: organizationSchema }],
+  },
+  {
     method: "POST",
     path: "/api/organizations/{id}/subscription/activate",
     tag: "Organizations",
     summary: "Activate an organization's subscription",
-    description: "Platform billing roles only -- never self-service.",
+    description: "SUPER_ADMIN only -- never self-service.",
     auth: "session",
     pathParams: [idParam("id", "Organization ID")],
     requestBody: { contentType: "application/json", schema: activateSubscriptionSchema },
@@ -971,6 +993,21 @@ const reports: OperationEntry[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Subscription Plans
+// ---------------------------------------------------------------------------
+const subscriptionPlans: OperationEntry[] = [
+  {
+    method: "GET",
+    path: "/api/subscription-plans",
+    tag: "Subscription Plans",
+    summary: "List the self-service subscription plan catalog",
+    description: "ORG_OWNER or SUPER_ADMIN only -- excludes the internal NO_SUBSCRIPTION marker plan.",
+    auth: "session",
+    responses: [{ status: 200, description: "Subscription plan catalog", schema: subscriptionPlanListResponseSchema }],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // User Clinics
 // ---------------------------------------------------------------------------
 const userClinics: OperationEntry[] = [
@@ -1165,6 +1202,7 @@ export const registry: OperationEntry[] = [
   ...prescriptions,
   ...platform,
   ...reports,
+  ...subscriptionPlans,
   ...userClinics,
   ...users,
 ];

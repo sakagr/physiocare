@@ -12,14 +12,16 @@ afterEach(() => {
 });
 
 /**
- * The platform layout guard (`guardNamespace`) only checks group -- it admits
- * every platform role, including `PLATFORM_SUPPORT` / `SALES` / `BILLING`,
- * none of which have any UI in V1 (UX.md). The API Explorer is SUPER_ADMIN
- * only, so the page itself gates on the `platformApi:explore` capability via
- * the existing `<Can>` primitive, falling back to `ForbiddenState` in place
- * rather than a redirect -- redirecting a platform-group user out of
- * `/platform/admin` would send them right back to it (`resolveLanding`
- * returns `/platform/admin` for the whole platform group).
+ * The platform layout guard (`guardNamespace`) only checks group.
+ * `SUPER_ADMIN` is the only platform-group role in V1 (the former
+ * `PLATFORM_SUPPORT`/`SALES`/`BILLING` roles were removed -- see AGENTS.md's
+ * Project Decisions), so the page's `<Can>` gate on `platformApi:explore`
+ * has no reachable negative branch through a real role today; it stays in
+ * place as the same mechanism every other capability gate in the app uses,
+ * falling back to `ForbiddenState` rather than a redirect -- redirecting a
+ * platform-group user out of `/platform/admin` would send them right back
+ * to it (`resolveLanding` returns `/platform/admin` for the whole platform
+ * group).
  */
 describe("API explorer page", () => {
   it("renders the destination for a super admin", () => {
@@ -28,17 +30,6 @@ describe("API explorer page", () => {
     });
 
     expect(screen.getByText("API explorer")).toBeInTheDocument();
-  });
-
-  it("shows the forbidden state for a platform role without the capability", () => {
-    renderWithProviders(<ApiExplorerPage />, {
-      currentUser: currentUserFixtures.platformSupport(),
-    });
-
-    expect(screen.queryByText("API explorer")).toBeNull();
-    expect(
-      screen.getByText("You don't have permission to view this")
-    ).toBeInTheDocument();
   });
 
   /**

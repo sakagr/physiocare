@@ -1,9 +1,6 @@
 insert into public.roles (name, display_name)
 values
     ('SUPER_ADMIN', 'Super Admin'),
-    ('PLATFORM_SUPPORT', 'Platform Support'),
-    ('PLATFORM_SALES', 'Platform Sales'),
-    ('PLATFORM_BILLING', 'Platform Billing'),
     ('ORG_OWNER', 'Owner'),
     ('ORG_ADMIN', 'Administrator'),
     ('ORG_PHYSIOTHERAPIST', 'Physiotherapist'),

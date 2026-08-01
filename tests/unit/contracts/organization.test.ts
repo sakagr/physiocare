@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bootstrapOrganizationResultSchema, organizationSchema } from "@/contracts/organization.contract";
+import { bootstrapOrganizationResultSchema, organizationDetailSchema, organizationSchema } from "@/contracts/organization.contract";
 
 /**
  * Response contracts for the Organizations domain (F2, M8/R8), mirroring
@@ -32,5 +32,36 @@ describe("bootstrapOrganizationResultSchema", () => {
   it("parses the bootstrap result (POST /api/organizations/bootstrap)", () => {
     const fixture = { organizationId: "org-1", adminUserId: "user-owner", adminUsername: "riverside.owner" };
     expect(bootstrapOrganizationResultSchema.parse(fixture)).toEqual(fixture);
+  });
+});
+
+describe("organizationDetailSchema", () => {
+  const baseFixture = {
+    id: "org-1",
+    organizationName: "Riverside Physio",
+    defaultCurrencyCode: "USD",
+    status: "active" as const,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
+
+  it("parses an Owner/SUPER_ADMIN response with the subscription block populated", () => {
+    const fixture = {
+      ...baseFixture,
+      subscription: {
+        planId: "plan-1",
+        planName: "Trial",
+        status: "trialing" as const,
+        startsAt: "2026-01-01T00:00:00Z",
+        endsAt: "2026-01-15T00:00:00Z",
+        usage: { clinics: { used: 1, max: 1 }, users: { used: 3, max: 5 } },
+      },
+    };
+    expect(organizationDetailSchema.parse(fixture)).toEqual(fixture);
+  });
+
+  it("parses an ORG_ADMIN response with subscription null", () => {
+    const fixture = { ...baseFixture, subscription: null };
+    expect(organizationDetailSchema.parse(fixture)).toEqual(fixture);
   });
 });

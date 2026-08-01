@@ -31,8 +31,8 @@ describe("role hierarchy", () => {
     expect(canManageRole("ORG_ADMIN", "ORG_ADMIN")).toBe(false);
   });
 
-  it("prevents employees and platform support roles from managing organization users", () => {
-    for (const caller of ["ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST", "PLATFORM_SUPPORT", "PLATFORM_SALES", "PLATFORM_BILLING"] as const) {
+  it("prevents employees from managing organization users", () => {
+    for (const caller of ["ORG_PHYSIOTHERAPIST", "ORG_RECEPTIONIST"] as const) {
       expect(canManageRole(caller, "ORG_PHYSIOTHERAPIST")).toBe(false);
     }
   });

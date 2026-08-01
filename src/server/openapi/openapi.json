@@ -8452,10 +8452,445 @@
         }
       }
     },
+    "/api/organizations/{id}": {
+      "get": {
+        "summary": "Get an organization's profile and subscription detail",
+        "description": "Any caller who may open Organization Settings (ORG_OWNER/ORG_ADMIN/SUPER_ADMIN). `subscription` is null unless the caller may also manage the subscription (ORG_OWNER/SUPER_ADMIN) -- projected per caller rather than a second endpoint.",
+        "tags": [
+          "Organizations"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Organization ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationName": {
+                      "type": "string"
+                    },
+                    "defaultCurrencyCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "active",
+                        "inactive",
+                        "archived"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "subscription": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "planId": {
+                              "type": "string"
+                            },
+                            "planName": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "inactive",
+                                "trialing",
+                                "active",
+                                "past_due",
+                                "cancelled",
+                                "expired"
+                              ]
+                            },
+                            "startsAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "endsAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "usage": {
+                              "type": "object",
+                              "properties": {
+                                "clinics": {
+                                  "type": "object",
+                                  "properties": {
+                                    "used": {
+                                      "type": "number"
+                                    },
+                                    "max": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "used",
+                                    "max"
+                                  ]
+                                },
+                                "users": {
+                                  "type": "object",
+                                  "properties": {
+                                    "used": {
+                                      "type": "number"
+                                    },
+                                    "max": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "used",
+                                    "max"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "clinics",
+                                "users"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "planId",
+                            "planName",
+                            "status",
+                            "startsAt",
+                            "endsAt",
+                            "usage"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationName",
+                    "defaultCurrencyCode",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "subscription"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Not found."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update an organization's profile",
+        "description": "ORG_OWNER (own organization) or SUPER_ADMIN only. Scoped to organization_name and default_currency_code -- subscription fields go through the dedicated subscription endpoints below.",
+        "tags": [
+          "Organizations"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Organization ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "organizationName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100
+                  },
+                  "defaultCurrencyCode": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization profile updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organization_name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "active",
+                        "inactive",
+                        "archived"
+                      ]
+                    },
+                    "subscription_plan_id": {
+                      "type": "string"
+                    },
+                    "subscription_status": {
+                      "type": "string",
+                      "enum": [
+                        "inactive",
+                        "trialing",
+                        "active",
+                        "past_due",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "subscription_starts_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "subscription_ends_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "default_currency_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "deleted_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organization_name",
+                    "status",
+                    "subscription_plan_id",
+                    "subscription_status",
+                    "subscription_starts_at",
+                    "subscription_ends_at",
+                    "default_currency_code",
+                    "created_by",
+                    "created_at",
+                    "updated_at",
+                    "deleted_at"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Invalid request payload"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Not found."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/organizations/{id}/subscription/activate": {
       "post": {
         "summary": "Activate an organization's subscription",
-        "description": "Platform billing roles only -- never self-service.",
+        "description": "SUPER_ADMIN only -- never self-service.",
         "tags": [
           "Organizations"
         ],
@@ -15270,6 +15705,118 @@
         }
       }
     },
+    "/api/subscription-plans": {
+      "get": {
+        "summary": "List the self-service subscription plan catalog",
+        "description": "ORG_OWNER or SUPER_ADMIN only -- excludes the internal NO_SUBSCRIPTION marker plan.",
+        "tags": [
+          "Subscription Plans"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Subscription plan catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "plan_name": {
+                        "type": "string"
+                      },
+                      "max_clinics": {
+                        "type": "number"
+                      },
+                      "max_users": {
+                        "type": "number"
+                      },
+                      "monthly_price": {
+                        "type": "number"
+                      },
+                      "yearly_price": {
+                        "type": "number"
+                      },
+                      "features": {},
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      },
+                      "deleted_at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "plan_name",
+                      "max_clinics",
+                      "max_users",
+                      "monthly_price",
+                      "yearly_price",
+                      "features",
+                      "created_at",
+                      "updated_at",
+                      "deleted_at"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/user-clinics": {
       "post": {
         "summary": "Assign a user to a clinic",
@@ -17266,6 +17813,7 @@
                           "users:manage",
                           "clinics:manage",
                           "settings:manage",
+                          "organization:manage",
                           "subscription:manage",
                           "auditLogs:view",
                           "platformApi:explore",

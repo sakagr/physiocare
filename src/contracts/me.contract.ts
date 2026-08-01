@@ -26,6 +26,7 @@ export const CAPABILITIES = [
   "users:manage",
   "clinics:manage",
   "settings:manage",
+  "organization:manage",
   "subscription:manage",
   "auditLogs:view",
   "platformApi:explore",

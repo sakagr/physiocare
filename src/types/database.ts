@@ -1495,9 +1495,6 @@ export type Database = {
     Enums: {
       app_role:
         | "SUPER_ADMIN"
-        | "PLATFORM_SUPPORT"
-        | "PLATFORM_SALES"
-        | "PLATFORM_BILLING"
         | "ORG_OWNER"
         | "ORG_ADMIN"
         | "ORG_PHYSIOTHERAPIST"
@@ -1676,9 +1673,6 @@ export const Constants = {
     Enums: {
       app_role: [
         "SUPER_ADMIN",
-        "PLATFORM_SUPPORT",
-        "PLATFORM_SALES",
-        "PLATFORM_BILLING",
         "ORG_OWNER",
         "ORG_ADMIN",
         "ORG_PHYSIOTHERAPIST",

@@ -51,4 +51,24 @@ export async function findSubscriptionPlanById(
   return data;
 }
 
+/**
+ * Lists the plan catalog available for self-service selection: active
+ * (non-deleted) plans, excluding the internal `NO_SUBSCRIPTION` marker
+ * plan -- mirrors `selectSubscriptionPlan`'s own guard against selecting it
+ * directly. Ordered by monthly_price so Trial (0) sorts first.
+ */
+export async function listSubscriptionPlans(supabase: SupabaseClient<Database>): Promise<SubscriptionPlan[]> {
+  const { data, error } = await supabase
+    .from("subscription_plans")
+    .select("*")
+    .is("deleted_at", null)
+    .neq("plan_name", "NO_SUBSCRIPTION")
+    .order("monthly_price", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
 

@@ -41,6 +41,10 @@ export interface SeedData {
     organizationId: string;
     owner: SeededUser;
   };
+  unsubscribed: {
+    organizationId: string;
+    owner: SeededUser;
+  };
 }
 
 function adminClient(): SupabaseClient {
@@ -149,9 +153,9 @@ export default async function globalSetup(): Promise<void> {
   }
 
   // A platform caller for the subscription select+activate calls below --
-  // `canActivateSubscription` is platform-billing-roles-only (never
-  // self-service), so the Owner cannot do this step itself. SUPER_ADMIN
-  // satisfies both `canManageSubscription` and `canActivateSubscription`.
+  // `canActivateSubscription` is SUPER_ADMIN-only (never self-service), so
+  // the Owner cannot do this step itself. SUPER_ADMIN satisfies both
+  // `canManageSubscription` and `canActivateSubscription`.
   const superAdmin = await user(null, "SUPER_ADMIN", "super", "E2E Super Admin");
 
   // --- Main org: everything except the saturated-limit scenario ---
@@ -187,12 +191,21 @@ export default async function globalSetup(): Promise<void> {
   }
   await createClinic(db, saturatedOrgId, `${runId} Saturated Clinic`);
 
+  // --- Unsubscribed org: no plan selected (bootstrap-default NO_SUBSCRIPTION
+  // / inactive), for the plan-selection E2E test -- the main and saturated
+  // orgs are both already select+activate'd above and so never show the
+  // "choose a plan" catalog state. ---
+  const unsubscribedOrgId = await createOrganization(db, `${runId}-unsubscribed`);
+  createdOrganizationIds.push(unsubscribedOrgId);
+  const unsubscribedOwner = await user(unsubscribedOrgId, "ORG_OWNER", "unsub-owner", "E2E Unsubscribed Owner");
+
   const seed: SeedData = {
     runId,
     createdAuthUserIds,
     createdOrganizationIds,
     main: { organizationId: mainOrgId, owner, admin, physio, clinicId, clinicName },
     saturated: { organizationId: saturatedOrgId, owner: saturatedOwner },
+    unsubscribed: { organizationId: unsubscribedOrgId, owner: unsubscribedOwner },
   };
 
   writeFileSync(SEED_FILE, JSON.stringify(seed, null, 2));

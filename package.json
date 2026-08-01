@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:seed": "NODE_ENV=local node supabase/scripts/seed.js",
     "db:seed:prod": "NODE_ENV=production node supabase/scripts/seed.js",
+    "db:types": "supabase gen types typescript --local > src/types/database.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "RUN_SUPABASE_INTEGRATION=1 vitest run tests/integration --no-file-parallelism",

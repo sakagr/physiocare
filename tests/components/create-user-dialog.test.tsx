@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { CreateUserDialog } from "@/features/users";
 import { ApiError } from "@/lib/api/api-error";
+import { currentUserFixtures } from "../helpers/current-user";
 import { renderWithProviders, screen } from "../helpers/render";
 
 const post = vi.hoisted(() => vi.fn());
@@ -81,5 +82,39 @@ describe("CreateUserDialog", () => {
     await user.click(screen.getByRole("button", { name: "Create user" }));
 
     expect(await screen.findByText("This username is already taken.")).toBeInTheDocument();
+  });
+
+  /**
+   * F4 M6: this call site renders the dedicated role-varying limit-enforcement
+   * state instead of the F3-era generic toast, per code and per caller role.
+   */
+  it("shows the Owner limit-enforcement copy and no generic toast, and keeps input intact", async () => {
+    post.mockRejectedValue(new ApiError("Organization has reached its subscription plan's user limit", 403, "ORGANIZATION_LIMIT_EXCEEDED"));
+    const user = userEvent.setup();
+    renderWithProviders(<CreateUserDialog opened onClose={vi.fn()} roleOptions={roleOptions} />, {
+      currentUser: currentUserFixtures.owner(),
+    });
+
+    await fillForm(user);
+    await user.click(screen.getByRole("button", { name: "Create user" }));
+
+    expect(await screen.findByText("You've reached your plan's limit. Upgrade your plan to add more.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to Settings" })).toHaveAttribute("href", "/app/settings");
+    expect(screen.queryByText("You've reached your plan's limit.")).toBeNull(); // the old flat-toast copy, not this component's
+    expect(screen.getByLabelText("Full name")).toHaveValue("Priya Physio");
+  });
+
+  it("shows the softer ask-your-owner copy for a non-owner caller, with no action link", async () => {
+    post.mockRejectedValue(new ApiError("Organization does not have an active subscription", 402, "SUBSCRIPTION_REQUIRED"));
+    const user = userEvent.setup();
+    renderWithProviders(<CreateUserDialog opened onClose={vi.fn()} roleOptions={roleOptions} />, {
+      currentUser: currentUserFixtures.admin(),
+    });
+
+    await fillForm(user);
+    await user.click(screen.getByRole("button", { name: "Create user" }));
+
+    expect(await screen.findByText("Your organization's subscription isn't active. Ask your owner to renew it.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Go to Settings" })).toBeNull();
   });
 });

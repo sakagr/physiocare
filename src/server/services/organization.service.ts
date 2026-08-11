@@ -31,7 +31,7 @@ import {
   canUpdateUserRole,
   canManageClinics,
   canAssignUserToClinic,
-  canOrganizationTransact,
+  assertOrganizationCanTransact,
   canCreateClinicWithinLimit,
   canCreateUserWithinLimit,
   canUpdateOrganizationProfile as canUpdateOrganizationProfilePredicate,
@@ -312,10 +312,7 @@ export async function createOrganizationUser(
 
   const organizationId = creator.organization_id;
 
-  const isTransactable = await canOrganizationTransact(supabase, organizationId);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, organizationId);
 
   const isWithinUserLimit = await canCreateUserWithinLimit(supabase, organizationId);
   if (!isWithinUserLimit) {
@@ -417,6 +414,18 @@ export async function updateUserProfile(
     throw new AppError("Forbidden: Insufficient administrative privileges", ErrorCodes.FORBIDDEN);
   }
 
+  // The organization being written to is the target's, not the caller's --
+  // canManageTargetUser already forces them equal except for SUPER_ADMIN,
+  // which has no organization of its own. The lookup exists for the gate; it
+  // also gives this function the NOT_FOUND its siblings already return.
+  const targetUser = await findUserById(supabase, targetUserId);
+  if (!targetUser) {
+    throw new AppError("User not found", ErrorCodes.NOT_FOUND);
+  }
+  if (targetUser.organization_id) {
+    await assertOrganizationCanTransact(supabase, targetUser.organization_id);
+  }
+
   const payload: Partial<UpdateUser> = {};
   if (input.fullName !== undefined) payload.full_name = input.fullName;
   if (input.phone !== undefined) payload.phone = input.phone;
@@ -444,6 +453,20 @@ export async function changeUserRole(
     throw new AppError("Forbidden: Insufficient privileges to assign this role", ErrorCodes.FORBIDDEN);
   }
 
+  // Self-action guard -- see deactivateUser for why this preserves the last-owner invariant.
+  if (callerUserId === targetUserId) {
+    throw new AppError("You cannot change your own role", ErrorCodes.TARGET_USER_IS_SELF);
+  }
+
+  // Target-anchored, and the lookup exists for the gate -- see updateUserProfile.
+  const targetUser = await findUserById(supabase, targetUserId);
+  if (!targetUser) {
+    throw new AppError("User not found", ErrorCodes.NOT_FOUND);
+  }
+  if (targetUser.organization_id) {
+    await assertOrganizationCanTransact(supabase, targetUser.organization_id);
+  }
+
   return updateUser(supabase, targetUserId, { role_id: roleRecord.id });
 }
 
@@ -465,6 +488,12 @@ export async function activateUser(
   const targetUser = await findUserById(supabase, targetUserId);
   if (!targetUser) {
     throw new AppError("User not found", ErrorCodes.NOT_FOUND);
+  }
+
+  // Target-anchored -- see updateUserProfile. Reactivating a user re-expands
+  // the organization's footprint, so it gates; deactivate/offboard do not.
+  if (targetUser.organization_id) {
+    await assertOrganizationCanTransact(supabase, targetUser.organization_id);
   }
 
   // 1. Enable in Supabase Auth
@@ -497,6 +526,15 @@ export async function deactivateUser(
   const isAuthorized = await canManageTargetUser(supabase, callerUserId, targetUserId);
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  // Blocks self-action. Combined with ROLE_HIERARCHY (authorization.service.ts
+  // -- only ORG_OWNER may act on ORG_OWNER), this is what keeps an organization
+  // from ever losing its last active owner through this path; there is no
+  // separate last-owner count check. Widening owner-management to a non-owner
+  // role would silently break that invariant.
+  if (callerUserId === targetUserId) {
+    throw new AppError("You cannot deactivate your own account", ErrorCodes.TARGET_USER_IS_SELF);
   }
 
   const targetUser = await findUserById(supabase, targetUserId);
@@ -538,6 +576,11 @@ export async function offboardUser(
   const isAuthorized = await canManageTargetUser(supabase, callerUserId, targetUserId);
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  // Self-action guard -- see deactivateUser for why this preserves the last-owner invariant.
+  if (callerUserId === targetUserId) {
+    throw new AppError("You cannot offboard your own account", ErrorCodes.TARGET_USER_IS_SELF);
   }
 
   const targetUser = await findUserById(supabase, targetUserId);
@@ -597,10 +640,7 @@ export async function createClinic(
     throw new Error("Caller must belong to a valid organization");
   }
 
-  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const isWithinClinicLimit = await canCreateClinicWithinLimit(supabase, caller.organization_id);
   if (!isWithinClinicLimit) {
@@ -645,6 +685,8 @@ export async function updateClinic(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const clinic = await findClinicById(supabase, clinicId);
   if (!clinic) {
@@ -691,6 +733,8 @@ export async function activateClinic(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const clinic = await findClinicById(supabase, clinicId);
   if (!clinic) {
@@ -794,6 +838,8 @@ export async function assignUserToClinic(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const targetUser = await findUserById(supabase, targetUserId);
   if (!targetUser || targetUser.deleted_at) {

@@ -11,7 +11,7 @@ import {
 } from "../repositories/package.repository";
 import { findUserById } from "../repositories/user.repository";
 import { existsPatientPackagesForPackage } from "../repositories/patient-package.repository";
-import { canViewPackages, canManagePackages } from "./authorization.service";
+import { canViewPackages, canManagePackages, assertOrganizationCanTransact } from "./authorization.service";
 import { recordAuditLog } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -34,6 +34,8 @@ export async function createPackage(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const nameCollision = await findPackageByNameInOrg(supabase, caller.organization_id, input.packageName);
   if (nameCollision) {
@@ -70,6 +72,8 @@ export async function updatePackage(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const pkg = await findPackageById(supabase, packageId);
   if (!pkg) {
@@ -116,6 +120,8 @@ export async function activatePackage(
     throw new Error("Caller must belong to a valid organization");
   }
 
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   const pkg = await findPackageById(supabase, packageId);
   if (!pkg) {
     throw new AppError("Package not found", ErrorCodes.NOT_FOUND);
@@ -146,6 +152,8 @@ export async function deactivatePackage(
     throw new Error("Caller must belong to a valid organization");
   }
 
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   const pkg = await findPackageById(supabase, packageId);
   if (!pkg) {
     throw new AppError("Package not found", ErrorCodes.NOT_FOUND);
@@ -175,6 +183,8 @@ export async function deletePackage(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const pkg = await findPackageById(supabase, packageId);
   if (!pkg) {

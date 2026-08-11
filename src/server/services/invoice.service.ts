@@ -28,7 +28,7 @@ import {
   canAccessInvoice,
   canDeleteInvoice,
   getAccessibleClinicIds,
-  canOrganizationTransact,
+  assertOrganizationCanTransact,
 } from "./authorization.service";
 import { recordAuditLog } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
@@ -88,10 +88,7 @@ export async function createInvoice(
     throw new Error("Caller must belong to a valid organization");
   }
 
-  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const patient = await findPatientById(supabase, input.patientId);
   if (!patient || patient.organization_id !== caller.organization_id) {
@@ -200,6 +197,8 @@ export async function updateInvoice(
     throw new Error("Caller must belong to a valid organization");
   }
 
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   const invoice = await findInvoiceById(supabase, invoiceId);
   if (!invoice) {
     throw new AppError("Invoice not found", ErrorCodes.NOT_FOUND);
@@ -277,6 +276,8 @@ export async function deleteInvoice(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const invoice = await findInvoiceById(supabase, invoiceId);
   if (!invoice) {

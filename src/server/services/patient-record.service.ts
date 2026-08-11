@@ -9,7 +9,7 @@ import {
   countPatientRecordsByPatient,
 } from "../repositories/patient-record.repository";
 import { findPatientById } from "../repositories/patient.repository";
-import { canViewPatientRecords, canManagePatientRecords } from "./authorization.service";
+import { canViewPatientRecords, canManagePatientRecords, assertOrganizationCanTransact } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePatientRecordInput } from "../validators/patient-record.validator";
@@ -76,6 +76,13 @@ export async function createPatientRecord(
   if (!patient) {
     throw new AppError("Patient not found", ErrorCodes.NOT_FOUND);
   }
+
+  // Gated on the patient's organization, not the caller's: unlike the other
+  // gated create paths, this one never fetches the caller, and a SUPER_ADMIN
+  // caller (admitted by canViewPatientRecords) has no organization of its own.
+  // Same reason consumePackageSession derives its organization from the resource.
+  // Runs before the upload so a rejected write never puts a file in Storage.
+  await assertOrganizationCanTransact(supabase, patient.organization_id);
 
   const objectPath = buildObjectPath(patient.organization_id, patient.id, input.fileName);
 

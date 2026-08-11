@@ -17,6 +17,7 @@ import {
   canManageConsultation,
   canAccessConsultation,
   getAccessibleClinicIds,
+  assertOrganizationCanTransact,
 } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -50,6 +51,10 @@ export async function createConsultation(
   if (!appointment) {
     throw new AppError("Appointment not found", ErrorCodes.NOT_FOUND);
   }
+
+  // Anchored on the appointment's organization: this path never fetches the
+  // caller, and canManageConsultation admits SUPER_ADMIN, which has none.
+  await assertOrganizationCanTransact(supabase, appointment.organization_id);
 
   const existing = await findConsultationByAppointmentId(supabase, appointment.id);
   if (existing) {
@@ -92,6 +97,9 @@ export async function updateConsultation(
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
+
+  // Resource-anchored for the same reason as createConsultation, above.
+  await assertOrganizationCanTransact(supabase, consultation.organization_id);
 
   return persistConsultationUpdate(supabase, consultationId, {
     symptoms: input.symptoms !== undefined ? input.symptoms || null : undefined,

@@ -14,7 +14,7 @@ import { existsAppointmentForPatient } from "../repositories/appointment.reposit
 import { existsConsultationForPatient } from "../repositories/consultation.repository";
 import { existsPrescriptionForPatient } from "../repositories/prescription.repository";
 import { existsPatientRecordForPatient } from "../repositories/patient-record.repository";
-import { canViewPatients, canManagePatients } from "./authorization.service";
+import { canViewPatients, canManagePatients, assertOrganizationCanTransact } from "./authorization.service";
 import { recordAuditLog } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -76,6 +76,8 @@ export async function createPatient(
     throw new Error("Caller must belong to a valid organization");
   }
 
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   const payload: Omit<InsertPatient, "patient_code"> = {
     organization_id: caller.organization_id,
     full_name: input.fullName,
@@ -130,6 +132,8 @@ export async function updatePatient(
     throw new Error("Caller must belong to a valid organization");
   }
 
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   const patient = await findPatientById(supabase, patientId);
   if (!patient) {
     throw new AppError("Patient not found", ErrorCodes.NOT_FOUND);
@@ -168,6 +172,8 @@ export async function deletePatient(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const patient = await findPatientById(supabase, patientId);
   if (!patient) {

@@ -10,7 +10,7 @@ import {
 } from "../repositories/payment.repository";
 import { findUserById } from "../repositories/user.repository";
 import { findInvoiceById } from "../repositories/invoice.repository";
-import { canManagePayments, canUpdatePaymentStatus, canAccessPayment, canOrganizationTransact } from "./authorization.service";
+import { canManagePayments, canUpdatePaymentStatus, canAccessPayment, assertOrganizationCanTransact } from "./authorization.service";
 import { recordAuditLog } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -45,10 +45,7 @@ export async function createPayment(
     throw new Error("Caller must belong to a valid organization");
   }
 
-  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const invoice = await findInvoiceById(supabase, input.invoiceId);
   if (!invoice || invoice.organization_id !== caller.organization_id) {
@@ -106,6 +103,8 @@ export async function updatePaymentStatus(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const payment = await findPaymentById(supabase, paymentId);
   if (!payment) {

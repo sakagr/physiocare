@@ -19,7 +19,7 @@ import {
   canAccessAppointment,
   canDeleteAppointment,
   getAccessibleClinicIds,
-  canOrganizationTransact,
+  assertOrganizationCanTransact,
 } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -82,10 +82,7 @@ export async function createAppointment(
     throw new Error("Caller must belong to a valid organization");
   }
 
-  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const patient = await findPatientById(supabase, input.patientId);
   if (!patient || patient.organization_id !== caller.organization_id) {
@@ -156,6 +153,11 @@ export async function updateAppointment(
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
 
+  // Anchored on the appointment's organization, not the caller's: this path
+  // never fetches the caller, and canAccessAppointment admits SUPER_ADMIN,
+  // which has no organization of its own.
+  await assertOrganizationCanTransact(supabase, appointment.organization_id);
+
   return persistAppointmentUpdate(supabase, appointmentId, {
     appointment_time: input.appointmentTime,
     appointment_type: input.appointmentType,
@@ -183,6 +185,9 @@ export async function updateAppointmentStatus(
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
+
+  // Resource-anchored for the same reason as updateAppointment, above.
+  await assertOrganizationCanTransact(supabase, appointment.organization_id);
 
   if (!isLegalAppointmentStatusTransition(appointment.status, input.status)) {
     throw new AppError(
@@ -223,6 +228,8 @@ export async function deleteAppointment(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const appointment = await findAppointmentById(supabase, appointmentId);
   if (!appointment) {

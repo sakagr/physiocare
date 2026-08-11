@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { ErrorCodes } from "@/server/errors";
-import { createOrganizationUser, updateUserProfile, changeUserRole, deactivateUser, activateUser, resetUserPassword } from "@/server/services/organization.service";
+import { createOrganizationUser, updateUserProfile, changeUserRole, deactivateUser, activateUser, offboardUser, resetUserPassword } from "@/server/services/organization.service";
 import { getAssignableRoles } from "@/server/services/authorization.service";
 import { listOrganizationUsers, getUserDetails } from "@/server/services/user.service";
 import { validOrganizationUserInput } from "../helpers/factories";
@@ -26,6 +26,29 @@ describeIntegration("User lifecycle", () => {
     expect((await changeUserRole(ctx.admin, owner.id, created.userId, "ORG_RECEPTIONIST")).role_id).toBe(await ctx.roleId("ORG_RECEPTIONIST"));
     expect((await deactivateUser(ctx.admin, ctx.admin, owner.id, created.userId)).is_active).toBe(false);
     expect((await activateUser(ctx.admin, ctx.admin, owner.id, created.userId)).is_active).toBe(true);
+  });
+
+  it("blocks a user from deactivating, offboarding, or changing the role of their own account, even for SUPER_ADMIN", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-self-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "self-owner");
+    const superAdmin = await ctx.createUser(null, "SUPER_ADMIN", "self-super");
+
+    await expect(deactivateUser(ctx.admin, ctx.admin, owner.id, owner.id)).rejects.toMatchObject({
+      code: ErrorCodes.TARGET_USER_IS_SELF,
+    });
+    await expect(offboardUser(ctx.admin, ctx.admin, owner.id, owner.id)).rejects.toMatchObject({
+      code: ErrorCodes.TARGET_USER_IS_SELF,
+    });
+    await expect(changeUserRole(ctx.admin, owner.id, owner.id, "ORG_ADMIN")).rejects.toMatchObject({
+      code: ErrorCodes.TARGET_USER_IS_SELF,
+    });
+    await expect(deactivateUser(ctx.admin, ctx.admin, superAdmin.id, superAdmin.id)).rejects.toMatchObject({
+      code: ErrorCodes.TARGET_USER_IS_SELF,
+    });
+
+    // Must still pass: a second owner may act on the first.
+    const secondOwner = await ctx.createUser(organization.id, "ORG_OWNER", "self-owner-2");
+    expect((await deactivateUser(ctx.admin, ctx.admin, secondOwner.id, owner.id)).is_active).toBe(false);
   });
 
   it("computes per-row canManage hints and caller-derived assignableRoles on the list and detail responses (ADR-0010)", async () => {

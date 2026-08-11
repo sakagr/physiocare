@@ -7,6 +7,7 @@ import { transitionAppointmentStatus } from "@/server/services/appointment-workf
 import { createPackage } from "@/server/services/package.service";
 import {
   createPatientPackage,
+  updatePatientPackage,
   getPatientPackageDetails,
   consumePackageSession,
   correctPackageSessionUsage,
@@ -177,6 +178,28 @@ describeIntegration("Appointment completion / package session consumption workfl
 
     const expired = await getPatientPackageDetails(ctx.admin, owner.id, patientPackage.id);
     expect(expired.status).toBe("expired");
+  });
+
+  it("rejects consuming a cancelled package and leaves the appointment status untouched", async () => {
+    const { owner, clinic, physio, patient } = await setup("cancelled");
+    const pkg = await createPackage(ctx.admin, owner.id, validPackageInput(`${ctx.runId}-cancelled`));
+    const patientPackage = await createPatientPackage(ctx.admin, owner.id, validPatientPackageInput({ patientId: patient.id, packageId: pkg.id }));
+    await updatePatientPackage(ctx.admin, owner.id, patientPackage.id, { status: "cancelled" });
+
+    const appointment = await createAppointment(
+      ctx.admin,
+      owner.id,
+      validAppointmentInput({ patientId: patient.id, clinicId: clinic.id, physiotherapistId: physio.id })
+    );
+    await completeCheckIn(owner.id, appointment.id);
+
+    await expect(
+      transitionAppointmentStatus(ctx.admin, owner.id, appointment.id, { status: "completed", patientPackageId: patientPackage.id })
+    ).rejects.toMatchObject({ code: ErrorCodes.PACKAGE_CANCELLED });
+
+    const { data: stillCheckedIn, error } = await ctx.admin.from("appointments").select("status").eq("id", appointment.id).single();
+    if (error) throw error;
+    expect(stillCheckedIn!.status).toBe("checked_in");
   });
 
   it("allows an admin correction and blocks it for a receptionist", async () => {

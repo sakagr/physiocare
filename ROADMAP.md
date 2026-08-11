@@ -207,6 +207,8 @@ Organization control surface.
 
 *Prerequisite: Patient Package Status Redesign (backend correctness fix, see `AGENTS.md` → Project Decisions).*
 
+*Prerequisite: Unsubscribed Organization Write Enforcement (backend correctness fix, see `AGENTS.md` → Project Decisions).*
+
 # Phase F5 – Catalog & Packages
 
 Packages and assignments.

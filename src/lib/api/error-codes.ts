@@ -129,6 +129,10 @@ export const ERROR_BEHAVIORS: Record<ErrorCode, ErrorBehaviorEntry> = {
     behavior: "toast",
     message: "That subscription change isn't allowed.",
   },
+  TARGET_USER_IS_SELF: {
+    behavior: "toast",
+    message: "You can't do that to your own account.",
+  },
   INVALID_CREDENTIALS: {
     behavior: "inline",
     message: "We couldn't sign you in. Check your username and password.",

@@ -585,6 +585,8 @@ Possible states:
 - archived
   - Organization has been retired and retained only for historical purposes.
 
+**V1 implements exactly one transition: `draft → active`, at the end of `bootstrapOrganization` (`organization.service.ts`), once the owner and organization record both exist.** No code path sets `status` to `inactive` or `archived` — there is no organization-suspend or organization-archive feature yet. Consequently, `canOrganizationTransact`'s `organization.status === "active"` clause is not yet a live enforcement dimension for any organization that finishes bootstrapping — it is always true for one. It exists ahead of a suspend/archive feature, not in place of one; do not read its presence as evidence that organization suspension works today.
+
 ---
 
 ## Subscription Principles
@@ -598,6 +600,31 @@ The following rules apply:
 - `subscription_status` defaults to `inactive`.
 - Trial or paid subscriptions begin only when explicitly activated by the business workflow.
 - Organization onboarding must not contain subscription or billing logic.
+
+---
+
+### The write/read boundary
+
+`canOrganizationTransact` (`authorization.service.ts`) decides whether an organization may write at all, independent of who the caller is or what they're trying to do. Gated call sites use its throwing form, `assertOrganizationCanTransact` — one helper across every site so the error code and message cannot drift.
+
+**Every write is gated except the exemptions below. Every read is always available.**
+
+The product is a record of what happened, not the mechanism: an organization whose subscription has lapsed can still refund a patient in cash, phone them to cancel, or deliver a visit — it simply cannot record any of it until it pays. Recording is the service being sold.
+
+Exempt, and why:
+
+- **Subscription lifecycle** — `selectSubscriptionPlan`, `activateOrganizationSubscription`, `renewOrganizationSubscription`, `expireLapsedSubscriptions`. These are how an organization leaves the gated state, so they can never depend on it.
+- **Bootstrap** — `bootstrapOrganization`. The organization does not exist yet.
+- **Identity and recovery** — `authenticate`, `endSession`, `requestPasswordReset`, `setPassword`, `changePassword`, `resetUserPassword`. Locking a paying-again customer out of their own account is never the right lever.
+- **Organization profile** — `updateOrganizationProfile`. The billing contact must stay correctable while lapsed.
+- **Wind-down of people and places** — `deactivateUser`, `offboardUser`, `deactivateClinic`, `deleteClinic`, `removeUserFromClinic`. Shrinking is always allowed; growing and correcting are not.
+- **System-triggered writes** — `createNotification`, which no caller initiates.
+
+Apply the rule to anything new by asking whether the write is one of the six exemptions. If it is not, gate it. "It is only an edit", "it is only a cancellation", and "it is only configuration" are not exemptions — those were all considered and rejected.
+
+A newly bootstrapped organization therefore cannot do anything but read until it selects at least a trial plan (`subscription_status = "trialing"` satisfies the gate).
+
+Anchor the gate on the organization the write lands in. Most call sites already resolve the caller and use `caller.organization_id`; where a path never fetches the caller — and its authorization predicate admits `SUPER_ADMIN`, which has no organization of its own — anchor on the resource instead (`patient.organization_id`, `appointment.organization_id`, the target user's). Authorization is checked first, then the gate, then anything else.
 
 ---
 
@@ -635,6 +662,34 @@ The following rules apply:
 
 ---
 
+
+---
+
+## Unsubscribed Organization Write Enforcement
+
+- **Scope:** Backend — prerequisite for frontend phase F5.
+- **Context:** `canOrganizationTransact` (`authorization.service.ts`) already gated 7 call sites (`createOrganizationUser`, `createClinic`, `createAppointment`, `createPatientPackage`, `consumePackageSession`, `createPayment`, `createInvoice`), but the boundary deciding which writes gate and which don't existed only as an emergent pattern across those 7 call sites — never written down, and never checked against the other ~50 write entry points in the service layer.
+- **Decision:** The write/read boundary is written down in *Subscription Principles* → *The write/read boundary*, and stated as an inversion: **every write is gated except six named exemptions.** An unsubscribed organization reads everything and records nothing. Thirty-one call sites are added to the nine that were gated first (patients and patient records, in the initial pass), for forty in total — cancellations and reversals, visit delivery (appointment status, consultations, prescriptions, attendance), edits to existing records, and the package catalog. The exemptions are subscription lifecycle, bootstrap, identity/recovery, organization profile, wind-down of people and places, and system-triggered notifications.
+
+  The four-line lookup-and-throw is extracted into `assertOrganizationCanTransact` (`authorization.service.ts`, adjacent to the predicate) and every site uses it. At forty sites the duplication is not the main argument — the error code and message must be identical everywhere, and forty hand-written copies would eventually diverge in a way no test would catch. It is the only throwing function in a module of boolean predicates; that is deliberate.
+
+  Separately, a self-action guard is added: no caller, including `SUPER_ADMIN`, may deactivate, offboard, or change the role of their own account. Enforced in the service layer (*Business Rules*) as a `callerUserId === targetUserId` check in `deactivateUser`, `offboardUser`, and `changeUserRole` (`organization.service.ts`), alongside each function's existing authorization check, throwing a new `TARGET_USER_IS_SELF` (409, `toast`) error code. No separate last-active-owner count check or repository function is added: with self-action blocked, `ROLE_HIERARCHY` (`authorization.service.ts`) already guarantees the invariant, since only `ORG_OWNER` may act on `ORG_OWNER` — a sole owner cannot be removed by anyone else inside the organization. `SUPER_ADMIN` is a deliberate exception, consistent with its existing global override in `canManageTargetUser`.
+- **Consequences:** A freshly bootstrapped organization cannot do anything but read until it selects at least a trial plan — plan selection becomes a hard gate on setup, not only on later transacting.
+
+  Four consequences read oddly and are intended, recorded here so they are not relitigated as bugs. A lapsed organization **can deactivate a user but cannot correct their name**, and **can delete a clinic but cannot rename it** — wind-down is exempt, editing is not; shrinking your footprint is always allowed, changing your records is the paid service. It **cannot cancel an appointment**, so its schedule keeps showing visits it will not deliver; the visit is still cancelled by phone, only the record is frozen. And it **cannot record a check-out against a check-in taken while subscribed**, leaving a half-open attendance row. Reads stay complete throughout, so the organization can always see exactly what it can no longer change.
+
+  Gating `updateUserProfile` and `changeUserRole` required adding a target-user lookup neither had, which also gives them the `NOT_FOUND` their siblings already returned — a new error path on two shipped endpoints, and one extra query per call. At those three user-lifecycle sites the gate is skipped when the target has no organization, since a platform user has no subscription to check.
+
+  `transitionAppointmentStatus` gets no gate of its own: both of its steps are gated, and in every branch the gate fires before the first write, so a lapsed organization gets one clean rejection and no partial state.
+
+  Two pre-existing issues were found but are explicitly not addressed by this decision: `bootstrapOrganization`'s compensation logic never unwinds the organization row itself if a later step fails, leaving an unrecoverable `status: draft` orphan; and `activateUser` never re-checks `canCreateUserWithinLimit`, unlike `createOrganizationUser`, so reactivating a user can silently exceed a downgraded plan's seat limit. Both are tracked as follow-ups, not fixed here.
+
+  Because `SUPER_ADMIN` is exempt from the self-action guard, a platform caller can still remove an organization's last active owner (deactivate, offboard, or demote them) — an accepted consequence, not a gap this decision closes. Such an organization cannot recover on its own: `canManageSubscription` is owner-or-`SUPER_ADMIN`, and promoting a replacement owner itself requires an owner. Recovery is `SUPER_ADMIN` promoting a new owner by hand; V1 exposes no platform console surface for this beyond the API explorer.
+
+  `UX.md`'s error table gains a third 409 treatment row, *prohibited action*, for `TARGET_USER_IS_SELF` — neither existing 409 row fits an action that is refused in every state (there is nothing to resync and no safe alternative to offer). `PAYMENT_EXCEEDS_INVOICE_TOTAL` currently sits in *blocking message + resync* and arguably belongs in the new row; it was deliberately left in place, as moving it changes behavior on a shipped surface and belongs to a later error-table pass.
+- **Reference:** `assertOrganizationCanTransact` (`authorization.service.ts`) and its forty call sites; `tests/integration/subscription-gate-matrix.test.ts` enumerates every one — a gate with no row there is untested, and a new gated write should add a row. ADR-0012 (historical — its context paragraph enumerating "seven call sites" and "the other five `SUBSCRIPTION_REQUIRED` sites" was accurate when written and describes the state before this decision, not current reality).
+
+---
 
 ---
 

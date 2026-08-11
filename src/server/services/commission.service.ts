@@ -7,7 +7,12 @@ import { listUsageByAppointmentIds } from "../repositories/package-session-usage
 import { listPatientPackagesByIds } from "../repositories/patient-package.repository";
 import { listInvoicesByAppointmentIds } from "../repositories/invoice.repository";
 import { findUserById, findRoleById } from "../repositories/user.repository";
-import { canManageCompensation, canViewCompensation, canViewPhysiotherapistReports } from "./authorization.service";
+import {
+  canManageCompensation,
+  canViewCompensation,
+  canViewPhysiotherapistReports,
+  assertOrganizationCanTransact,
+} from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { SetUserCompensationInput } from "../validators/compensation.validator";
 import { MAX_REPORT_ROWS } from "../validators/report.validator";
@@ -43,6 +48,8 @@ export async function setUserCompensation(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const targetUser = await findUserById(supabase, targetUserId);
   if (!targetUser || targetUser.organization_id !== caller.organization_id) {

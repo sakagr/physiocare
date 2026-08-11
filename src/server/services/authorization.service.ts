@@ -12,6 +12,7 @@ import { findOrganizationById } from "../repositories/organization.repository";
 import { findSubscriptionPlanById } from "../repositories/subscription.repository";
 import { countClinics } from "../repositories/clinic.repository";
 import { countUsers } from "../repositories/user.repository";
+import { AppError, ErrorCodes } from "../errors";
 
 /**
  * Centralized mapping of role management administrative capabilities.
@@ -379,6 +380,25 @@ export async function canOrganizationTransact(
     return false;
   }
   return organization.status === "active" && ["trialing", "active", "past_due"].includes(organization.subscription_status);
+}
+
+/**
+ * Throwing form of canOrganizationTransact, used by every gated write path
+ * (see AGENTS.md "Subscription Principles" -> "The write/read boundary").
+ * The rule covers ~40 call sites; they share one helper so the error code
+ * and message cannot drift between them.
+ *
+ * The only function in this module that throws rather than returning a
+ * boolean -- deliberate, since the alternative is 40 hand-copied throw
+ * blocks. The predicate itself stays exported and unchanged.
+ */
+export async function assertOrganizationCanTransact(
+  supabase: SupabaseClient<Database>,
+  organizationId: string
+): Promise<void> {
+  if (!(await canOrganizationTransact(supabase, organizationId))) {
+    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
+  }
 }
 
 /**

@@ -26,7 +26,7 @@ import {
   canViewPatientPackages,
   canManagePatientPackages,
   canCorrectPackageSessionUsage,
-  canOrganizationTransact,
+  assertOrganizationCanTransact,
 } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
@@ -72,10 +72,7 @@ export async function createPatientPackage(
     throw new Error("Caller must belong to a valid organization");
   }
 
-  const isTransactable = await canOrganizationTransact(supabase, caller.organization_id);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const patient = await findPatientById(supabase, input.patientId);
   if (!patient || patient.organization_id !== caller.organization_id) {
@@ -126,6 +123,8 @@ export async function updatePatientPackage(
     throw new Error("Caller must belong to a valid organization");
   }
 
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   const patientPackage = await findPatientPackageById(supabase, patientPackageId);
   if (!patientPackage) {
     throw new AppError("Patient package not found", ErrorCodes.NOT_FOUND);
@@ -162,6 +161,8 @@ export async function deletePatientPackage(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const patientPackage = await findPatientPackageById(supabase, patientPackageId);
   if (!patientPackage) {
@@ -309,10 +310,7 @@ export async function consumePackageSession(
   patientPackageId: string,
   appointmentId: string
 ): Promise<PackageSessionUsage> {
-  const isTransactable = await canOrganizationTransact(supabase, organizationId);
-  if (!isTransactable) {
-    throw new AppError("Organization does not have an active subscription", ErrorCodes.SUBSCRIPTION_REQUIRED);
-  }
+  await assertOrganizationCanTransact(supabase, organizationId);
 
   const patientPackage = await findPatientPackageById(supabase, patientPackageId);
   if (!patientPackage || patientPackage.organization_id !== organizationId) {
@@ -353,6 +351,8 @@ export async function reversePackageSessionConsumption(
   organizationId: string,
   appointmentId: string
 ): Promise<void> {
+  await assertOrganizationCanTransact(supabase, organizationId);
+
   await persistReversePackageSessionUsage(supabase, { organizationId, appointmentId });
 }
 
@@ -378,6 +378,8 @@ export async function correctPackageSessionUsage(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const reversed = await persistReversePackageSessionUsage(supabase, {
     organizationId: caller.organization_id,

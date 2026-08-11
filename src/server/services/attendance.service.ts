@@ -11,7 +11,13 @@ import {
 import { findUserById, findRoleById } from "../repositories/user.repository";
 import { findClinicById } from "../repositories/clinic.repository";
 import { findAssignmentsByUser } from "../repositories/user-clinic.repository";
-import { canViewAttendance, canManageAttendance, canRecordOwnAttendance, getAccessibleClinicIds } from "./authorization.service";
+import {
+  canViewAttendance,
+  canManageAttendance,
+  canRecordOwnAttendance,
+  getAccessibleClinicIds,
+  assertOrganizationCanTransact,
+} from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreateAttendanceInput, UpdateAttendanceInput } from "../validators/attendance.validator";
@@ -45,6 +51,8 @@ export async function recordCheckIn(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const targetUser = await findUserById(supabase, targetUserId);
   if (!targetUser || targetUser.organization_id !== caller.organization_id) {
@@ -125,6 +133,13 @@ export async function recordCheckOut(
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
 
+  // Placed after the authorization check rather than after the caller lookup:
+  // this function's authorization depends on the record it just resolved, and
+  // a caller with no right to the record must not learn its organization's
+  // subscription state. Consequence: here a NOT_FOUND or scoping FORBIDDEN
+  // wins over SUBSCRIPTION_REQUIRED, unlike the caller-anchored gates.
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
+
   if (!attendance.check_in_time) {
     throw new AppError("Cannot check out a record with no check-in", ErrorCodes.ATTENDANCE_CHECK_IN_REQUIRED);
   }
@@ -150,6 +165,8 @@ export async function updateAttendance(
   if (!caller || !caller.organization_id) {
     throw new Error("Caller must belong to a valid organization");
   }
+
+  await assertOrganizationCanTransact(supabase, caller.organization_id);
 
   const attendance = await findAttendanceById(supabase, attendanceId);
   if (!attendance) {

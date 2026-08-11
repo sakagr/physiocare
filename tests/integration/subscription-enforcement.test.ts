@@ -2,9 +2,21 @@ import { expect, it } from "vitest";
 import { ErrorCodes } from "@/server/errors";
 import { bootstrapOrganization, createClinic, assignUserToClinic } from "@/server/services/organization.service";
 import { createPatient } from "@/server/services/patient.service";
+import { createPatientRecord } from "@/server/services/patient-record.service";
+import { createPatientPackage, consumePackageSession } from "@/server/services/patient-package.service";
+import { createInvoice } from "@/server/services/invoice.service";
+import { createPayment } from "@/server/services/payment.service";
 import { createAppointment, listOrganizationAppointments } from "@/server/services/appointment.service";
 import { selectSubscriptionPlan, activateOrganizationSubscription } from "@/server/services/subscription.service";
-import { validOrganizationInput, validClinicInput, validPatientInput, validAppointmentInput } from "../helpers/factories";
+import {
+  validOrganizationInput,
+  validClinicInput,
+  validPatientInput,
+  validAppointmentInput,
+  validPatientPackageInput,
+  validInvoiceInput,
+  validPaymentInput,
+} from "../helpers/factories";
 import { describeIntegration, setupIntegrationContext } from "../helpers/integration-context";
 
 describeIntegration("Subscription enforcement", () => {
@@ -50,6 +62,69 @@ describeIntegration("Subscription enforcement", () => {
       validAppointmentInput({ patientId: patient.id, clinicId: clinic.id, physiotherapistId: physio.id })
     );
     expect(appointment.status).toBe("scheduled");
+  });
+
+  it("blocks every remaining transactional write path while the organization cannot transact", async () => {
+    const { organizationId, adminUserId } = await bootstrapInactiveOrg("gate-rest");
+
+    // The referenced records deliberately do not exist. Every one of these gates
+    // runs before its function looks up any resource, so a non-existent id still
+    // reaches the gate -- which means this test also pins that ordering. If a gate
+    // is ever moved below its resource lookup, these assertions start failing with
+    // NOT_FOUND. That is the gate regressing, not the fixtures going stale: fix the
+    // service, do not give this test real records.
+    const fake = () => crypto.randomUUID();
+
+    await expect(
+      createAppointment(ctx.admin, adminUserId, validAppointmentInput({ patientId: fake(), clinicId: fake(), physiotherapistId: fake() }))
+    ).rejects.toMatchObject({ code: ErrorCodes.SUBSCRIPTION_REQUIRED });
+
+    await expect(
+      createPatientPackage(ctx.admin, adminUserId, validPatientPackageInput({ patientId: fake(), packageId: fake() }))
+    ).rejects.toMatchObject({ code: ErrorCodes.SUBSCRIPTION_REQUIRED });
+
+    await expect(consumePackageSession(ctx.admin, organizationId, fake(), fake())).rejects.toMatchObject({
+      code: ErrorCodes.SUBSCRIPTION_REQUIRED,
+    });
+
+    await expect(createPayment(ctx.admin, adminUserId, validPaymentInput(fake()))).rejects.toMatchObject({
+      code: ErrorCodes.SUBSCRIPTION_REQUIRED,
+    });
+
+    await expect(
+      createInvoice(ctx.admin, adminUserId, validInvoiceInput({ patientId: fake(), clinicId: fake() }))
+    ).rejects.toMatchObject({ code: ErrorCodes.SUBSCRIPTION_REQUIRED });
+  });
+
+  it("blocks createPatient until a plan is selected, and blocks createPatientRecord once the plan lapses", async () => {
+    const { organizationId, adminUserId } = await bootstrapInactiveOrg("gate-patient");
+
+    await expect(createPatient(ctx.admin, adminUserId, validPatientInput(`${ctx.runId}-gate-patient`))).rejects.toMatchObject({
+      code: ErrorCodes.SUBSCRIPTION_REQUIRED,
+    });
+
+    // Take the org through the real path -- select Trial, create the patient the
+    // way the product does -- then lapse the subscription underneath it. This is
+    // the actual scenario the record gate exists for: an organization that already
+    // has patients on file and stops paying.
+    await selectSubscriptionPlan(ctx.admin, adminUserId, organizationId, "Trial");
+    const patient = await createPatient(ctx.admin, adminUserId, validPatientInput(`${ctx.runId}-gate-patient`));
+
+    const { error: lapseError } = await ctx.admin
+      .from("organizations")
+      .update({ subscription_status: "inactive" })
+      .eq("id", organizationId);
+    if (lapseError) throw lapseError;
+
+    await expect(
+      createPatientRecord(ctx.admin, ctx.admin, adminUserId, patient.id, {
+        recordType: "xray",
+        title: "Lapsed upload",
+        fileBuffer: Buffer.from("%PDF-1.4 test content"),
+        fileName: "lapsed.pdf",
+        mimeType: "application/pdf",
+      })
+    ).rejects.toMatchObject({ code: ErrorCodes.SUBSCRIPTION_REQUIRED });
   });
 
   it("leaves subscription_status at inactive when a paid plan is selected, pending platform activation", async () => {

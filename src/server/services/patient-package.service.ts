@@ -33,30 +33,6 @@ import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePatientPackageInput, UpdatePatientPackageInput } from "../validators/patient-package.validator";
 
 /**
- * True if the package's validity window (extended_validity_to when set,
- * otherwise expiry_date) has passed as of the given moment.
- */
-function isPackageExpired(patientPackage: PatientPackage, asOf: Date): boolean {
-  const validThrough = patientPackage.extended_validity_to ?? patientPackage.expiry_date;
-  return asOf > new Date(validThrough);
-}
-
-/**
- * Lazily transitions an active patient package to "expired" if its validity
- * window has passed. No scheduled job -- evaluated whenever a patient
- * package is individually read or written.
- */
-async function evaluatePackageExpiry(
-  supabase: SupabaseClient<Database>,
-  patientPackage: PatientPackage
-): Promise<PatientPackage> {
-  if (patientPackage.status === "active" && isPackageExpired(patientPackage, new Date())) {
-    return persistPatientPackageUpdate(supabase, patientPackage.id, { status: "expired" });
-  }
-  return patientPackage;
-}
-
-/**
  * Maps a matchable exception message raised by the consume_package_session
  * database function (a concurrency safety net, see AGENTS.md "Database
  * Functions for Atomic Operations") to the same AppError a well-behaved
@@ -124,7 +100,6 @@ export async function createPatientPackage(
     total_sessions: pkg.total_sessions,
     remaining_sessions: pkg.total_sessions,
     used_sessions: 0,
-    status: "active",
     purchased_on: purchasedOn,
     expiry_date: expiryDate.toISOString().slice(0, 10),
   });
@@ -160,11 +135,11 @@ export async function updatePatientPackage(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  await evaluatePackageExpiry(supabase, patientPackage);
-
+  const isCancelling = input.status === "cancelled";
   return persistPatientPackageUpdate(supabase, patientPackageId, {
     extended_validity_to: input.extendedValidityTo !== undefined ? input.extendedValidityTo : undefined,
-    status: input.status !== undefined ? input.status : undefined,
+    cancelled_at: isCancelling ? new Date().toISOString() : undefined,
+    cancelled_by: isCancelling ? callerUserId : undefined,
   });
 }
 
@@ -235,7 +210,7 @@ export async function getPatientPackageDetails(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return evaluatePackageExpiry(supabase, patientPackage);
+  return patientPackage;
 }
 
 /**
@@ -344,12 +319,15 @@ export async function consumePackageSession(
     throw new AppError("Patient package not found", ErrorCodes.NOT_FOUND);
   }
 
-  const evaluated = await evaluatePackageExpiry(supabase, patientPackage);
-  if (evaluated.status === "expired") {
+  if (patientPackage.status === "cancelled") {
+    throw new AppError("Patient package was cancelled", ErrorCodes.PACKAGE_CANCELLED);
+  }
+
+  if (patientPackage.status === "expired") {
     throw new AppError("Patient package has expired", ErrorCodes.PACKAGE_EXPIRED);
   }
 
-  if (evaluated.remaining_sessions <= 0) {
+  if (patientPackage.remaining_sessions <= 0) {
     throw new AppError("Patient package has no remaining sessions", ErrorCodes.PACKAGE_SESSIONS_EXHAUSTED);
   }
 

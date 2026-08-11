@@ -551,6 +551,13 @@ export type Database = {
             referencedRelation: "patient_packages"
             referencedColumns: ["organization_id", "id"]
           },
+          {
+            foreignKeyName: "invoices_organization_id_patient_package_id_fkey"
+            columns: ["organization_id", "patient_package_id"]
+            isOneToOne: false
+            referencedRelation: "patient_packages_view"
+            referencedColumns: ["organization_id", "id"]
+          },
         ]
       }
       notifications: {
@@ -753,6 +760,13 @@ export type Database = {
             referencedRelation: "patient_packages"
             referencedColumns: ["organization_id", "id"]
           },
+          {
+            foreignKeyName: "package_session_usage_organization_id_patient_package_id_fkey"
+            columns: ["organization_id", "patient_package_id"]
+            isOneToOne: false
+            referencedRelation: "patient_packages_view"
+            referencedColumns: ["organization_id", "id"]
+          },
         ]
       }
       packages: {
@@ -804,6 +818,8 @@ export type Database = {
       }
       patient_packages: {
         Row: {
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string
           deleted_at: string | null
           expiry_date: string
@@ -816,12 +832,13 @@ export type Database = {
           patient_id: string
           purchased_on: string
           remaining_sessions: number
-          status: Database["public"]["Enums"]["package_status"]
           total_sessions: number
           updated_at: string
           used_sessions: number
         }
         Insert: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           deleted_at?: string | null
           expiry_date: string
@@ -834,12 +851,13 @@ export type Database = {
           patient_id: string
           purchased_on?: string
           remaining_sessions: number
-          status?: Database["public"]["Enums"]["package_status"]
           total_sessions: number
           updated_at?: string
           used_sessions?: number
         }
         Update: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string
           deleted_at?: string | null
           expiry_date?: string
@@ -852,12 +870,18 @@ export type Database = {
           patient_id?: string
           purchased_on?: string
           remaining_sessions?: number
-          status?: Database["public"]["Enums"]["package_status"]
           total_sessions?: number
           updated_at?: string
           used_sessions?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "patient_packages_organization_id_cancelled_by_fkey"
+            columns: ["organization_id", "cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
+          },
           {
             foreignKeyName: "patient_packages_organization_id_fkey"
             columns: ["organization_id"]
@@ -1442,7 +1466,98 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      patient_packages_view: {
+        Row: {
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string | null
+          deleted_at: string | null
+          expiry_date: string | null
+          extended_validity_to: string | null
+          id: string | null
+          organization_id: string | null
+          package_id: string | null
+          package_name: string | null
+          package_price: number | null
+          patient_id: string | null
+          purchased_on: string | null
+          remaining_sessions: number | null
+          status: Database["public"]["Enums"]["package_status"] | null
+          total_sessions: number | null
+          updated_at: string | null
+          used_sessions: number | null
+        }
+        Insert: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          expiry_date?: string | null
+          extended_validity_to?: string | null
+          id?: string | null
+          organization_id?: string | null
+          package_id?: string | null
+          package_name?: string | null
+          package_price?: number | null
+          patient_id?: string | null
+          purchased_on?: string | null
+          remaining_sessions?: number | null
+          status?: never
+          total_sessions?: number | null
+          updated_at?: string | null
+          used_sessions?: number | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          expiry_date?: string | null
+          extended_validity_to?: string | null
+          id?: string | null
+          organization_id?: string | null
+          package_id?: string | null
+          package_name?: string | null
+          package_price?: number | null
+          patient_id?: string | null
+          purchased_on?: string | null
+          remaining_sessions?: number | null
+          status?: never
+          total_sessions?: number | null
+          updated_at?: string | null
+          used_sessions?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_packages_organization_id_cancelled_by_fkey"
+            columns: ["organization_id", "cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "patient_packages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_packages_organization_id_package_id_fkey"
+            columns: ["organization_id", "package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "patient_packages_organization_id_patient_id_fkey"
+            columns: ["organization_id", "patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
     }
     Functions: {
       consume_package_session: {

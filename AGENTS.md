@@ -126,6 +126,8 @@ updatePatient()
 deleteInvoice()
 ```
 
+A repository may read from a database view instead of its table when a value must be derived from other columns and would otherwise go stale between writes (for example, a status computed from dates and counters). Writes always target the table directly, never the view. An insert/update function that must return the entity re-reads it from the view after the write completes, so callers receive the same fully-derived shape a subsequent read would produce -- this is the one case a repository issues two round-trips for what looks like a single operation, and it should stay that way rather than being "optimized" back to one, since the view is the only source of the derived fields.
+
 ---
 
 ## Services
@@ -223,6 +225,31 @@ export type InsertUser =
 export type UpdateUser =
     Database["public"]["Tables"]["users"]["Update"];
 ```
+
+### View-Backed Entities
+
+An entity sources its `Entity` type from a database view instead of its table when a derived value (for example, a computed status) must be recomputed on every read to avoid going stale between writes. In that case:
+
+- `Entity` sources from `Database["public"]["Views"][...]["Row"]`.
+- `InsertEntity`/`UpdateEntity` still source from `Database["public"]["Tables"][...]["Insert"/"Update"]` -- the view is read-only from the application's perspective; writes always target the table.
+- `supabase gen types` marks every view column nullable regardless of the underlying table's constraints (Postgres views carry no NOT NULL metadata to introspect). Where a column is actually `NOT NULL` on the source table, or -- for a derived column -- is guaranteed non-null by the view's own expression, narrow it back with a mapped type rather than living with the widened optionality; genuinely nullable columns keep their `| null`. Repository read chains cast the query result to that narrowed type via `.overrideTypes<Entity, { merge: false }>()`, since the client library's own inferred type is the same unnecessarily-widened one.
+
+Example:
+
+```ts
+type PatientPackageViewRow = Database["public"]["Views"]["patient_packages_view"]["Row"];
+type NullableInPatientPackageView = "extended_validity_to" | "deleted_at" | "cancelled_at" | "cancelled_by";
+
+export type PatientPackage = {
+  [K in keyof PatientPackageViewRow]: K extends NullableInPatientPackageView
+    ? PatientPackageViewRow[K]
+    : NonNullable<PatientPackageViewRow[K]>;
+};
+export type InsertPatientPackage = Database["public"]["Tables"]["patient_packages"]["Insert"];
+export type UpdatePatientPackage = Database["public"]["Tables"]["patient_packages"]["Update"];
+```
+
+This is the exception, not the default. Most entities have no view and source all three types from the same table.
 
 ---
 
@@ -595,6 +622,19 @@ The following rules apply:
 - **Decision:** Remove all three roles entirely — from the `app_role` enum and `roles` seed, from every authorization predicate that named them (`ROLE_HIERARCHY`, `PLATFORM_BILLING_ROLES`, `canActivateSubscription`, `canManageSubscription`, `resolveGroup`'s `startsWith("PLATFORM_")` rule), and from every test and doc reference. No re-introduction path, placeholder, or "reserved for future use" note is kept anywhere — a later need is a later decision. The V1 role set is exactly `SUPER_ADMIN`, `ORG_OWNER`, `ORG_ADMIN`, `ORG_PHYSIOTHERAPIST`, `ORG_RECEPTIONIST`; all platform duties are `SUPER_ADMIN`'s. `PLATFORM_CAPABILITIES` and the platform/org group split are unchanged — `SUPER_ADMIN` remains the sole platform-group role and `platformApi:explore` is untouched.
 - **Consequences:** `canActivateSubscription`/`canManageSubscription` narrow to `SUPER_ADMIN`-only / `{ORG_OWNER, SUPER_ADMIN}` respectively; the "sales-assisted selection" branch `canManageSubscription` used to carry is dropped, not reworded, since it never had a real caller. `organizations_select_policy` and `organizations_update_policy` already admitted `is_super_admin()` unconditionally, so no RLS widening was needed for subscription activation/renewal — removing the roles closes what would otherwise have been a gap, rather than requiring new grants. The `users_select_policy` clause added in `20260728000000_users_select_self_read.sql` (`id = auth.uid()`, worked around a `NULL = NULL` self-read bug for platform roles other than `SUPER_ADMIN`) becomes dead code — every remaining platform-group user (`SUPER_ADMIN`) was always covered by the policy's `is_super_admin()` branch; left in place rather than removed as a drive-by cleanup. The `ApiExplorerPage`/`platform-admin-page` `ForbiddenState` fallback branch has no reachable real-role scenario left, but the `<Can>` gate and the capability check are kept as-is — the mechanism is cheap, correct, and harmless to leave in place even though nothing can currently trigger its negative branch. `organizations_update_policy`'s pre-existing `using`/`with check` disagreement (`with check` omits the `ORG_OWNER` role check `using` carries) was recreated verbatim as part of the enum-driven policy sweep this removal required — held, not fixed, since it's a functional change independent of role removal; whoever next recreates this policy for any reason inherits the same trap.
 - **Reference:** ADR-0009 (historical — its Consequences describe the three roles as reaching `/platform/admin`, and separately cite `tests/integration/me.test.ts` as pinning that all three receive no capabilities; that test was removed by this change. Both statements were accurate when written, neither describes current reality). `supabase/migrations/20260801000000_remove_platform_roles.sql`.
+
+---
+
+## Patient Package Status as a Derived View
+
+- **Scope:** Backend — prerequisite for frontend phase F5.
+- **Context:** `patient_packages.status` was a stored four-value enum where three of four values (`completed`, `expired`) were pure functions of other columns already on the row, and only `cancelled` recorded a real decision. Because the derived values were stored, they went stale: `expired` was applied only by `evaluatePackageExpiry`, called from individual read/write paths, never from the two list paths (`listPatientPackagesForPatient`, `listOrganizationPatientPackages`) — a lapsed package could display `active` indefinitely in any list view. Separately, the expiry check compared a JS `Date` instant against a date column's UTC-midnight instant — a genuine, asymmetric timezone defect for any user in a timezone ahead of UTC (the addition that computes `expiry_date` in the first place has no such defect: its local-time round-trip through `getDate`/`setDate`/`toISOString` cancels out the server's timezone offset exactly, and is unchanged by this decision).
+- **Decision:** `status` is dropped from `patient_packages` entirely. Cancellation becomes an explicit `cancelled_at timestamptz null` / `cancelled_by uuid null` pair (the latter a composite FK to `users(organization_id, id)`, mirroring `appointment_status_logs.changed_by`), populated by the service layer from the caller's resolved identity. `status` is derived live in a new view, `patient_packages_view` (`security_invoker = true`, explicit `grant select ... to authenticated`), with precedence `cancelled -> completed -> expired -> active` and an explicit cast to `public.package_status` so the generated TypeScript type stays the four-value union rather than widening to `string`. Repositories read from the view, write to the table; insert/update repository functions perform the table write, then re-read the row from the view so callers still receive the fully-derived shape from a single function call. `evaluatePackageExpiry`/`isPackageExpired` are removed entirely; the two session-consumption RPCs (`consume_package_session`, `reverse_package_session_usage`) stop writing `status`, becoming pure counter operations. A new error code, `PACKAGE_CANCELLED`, blocks session consumption against a cancelled assignment — a gap that existed before this change and is closed here because `cancelled` is now a first-class, explicitly-checked precedence branch rather than an implicit enum value.
+- **Consequences:** No index exists on `status` today and none is added: the `expired` branch depends on `current_date`, which is `STABLE` not `IMMUTABLE`, so Postgres disallows a functional index on it directly; at this project's per-organization row scale this is a non-issue, and a materialized-view or trigger-maintained column is explicitly not adopted. `select pp.*` freezes the view's column list at creation time — a future column added to `patient_packages` will not appear in `patient_packages_view` until the view itself is recreated; `tests/integration/patient-packages.test.ts` asserts the two column sets stay in sync so this can't drift silently, and whoever next adds a column to `patient_packages` must also replace this view. `supabase gen types` marks every view column nullable regardless of the table's constraints (see *Database Types* → *View-Backed Entities*), so `PatientPackage` narrows the generated `Row` type back with a mapped type rather than sourcing it directly. This is the first view in this schema; it does not establish a general policy of converting other derivable-looking status columns (`appointments.status`, `payments.payment_status`, `organizations.status`/`subscription_status`) to views — those are explicit, service-enforced state machines with no equivalent "mostly-derivable" pathology, and should be evaluated on their own terms if ever proposed. Removing the `status` writes from the two consumption RPCs tightens their alignment with the *Database Functions for Atomic Operations* constraint that such functions must not encode business-rule branching.
+- **Reference:** `supabase/migrations/20260803000000_patient_package_status_view.sql`.
+
+---
+
 
 ---
 

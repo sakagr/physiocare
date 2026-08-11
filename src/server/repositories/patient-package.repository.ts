@@ -1,23 +1,51 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
-export type PatientPackage = Database["public"]["Tables"]["patient_packages"]["Row"];
+type PatientPackageViewRow = Database["public"]["Views"]["patient_packages_view"]["Row"];
+
+/**
+ * supabase gen types marks every view column nullable regardless of the
+ * underlying table's constraints (Postgres views carry no NOT NULL
+ * metadata to introspect). Every column here is NOT NULL on
+ * patient_packages itself (1610_table_patient_packages.sql), or, for
+ * `status`, is guaranteed non-null by the view's own CASE expression's
+ * `else` branch -- only these four are genuinely nullable.
+ */
+type NullableInPatientPackageView = "extended_validity_to" | "deleted_at" | "cancelled_at" | "cancelled_by";
+
+export type PatientPackage = {
+  [K in keyof PatientPackageViewRow]: K extends NullableInPatientPackageView
+    ? PatientPackageViewRow[K]
+    : NonNullable<PatientPackageViewRow[K]>;
+};
+
 export type InsertPatientPackage = Database["public"]["Tables"]["patient_packages"]["Insert"];
 export type UpdatePatientPackage = Database["public"]["Tables"]["patient_packages"]["Update"];
 
 /**
- * Inserts a new patient package assignment record.
+ * Inserts a new patient package assignment record. `status` is derived by
+ * patient_packages_view, not stored, so the insert writes the table and
+ * re-reads the row from the view to return the fully-derived shape.
  */
 export async function insertPatientPackage(
   supabase: SupabaseClient<Database>,
   patientPackage: InsertPatientPackage
 ): Promise<PatientPackage> {
-  const { data, error } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from("patient_packages")
     .insert(patientPackage)
-    .select()
+    .select("id")
     .single();
+  if (insertError) {
+    throw insertError;
+  }
 
+  const { data, error } = await supabase
+    .from("patient_packages_view")
+    .select("*")
+    .eq("id", inserted.id)
+    .single()
+    .overrideTypes<PatientPackage, { merge: false }>();
   if (error) {
     throw error;
   }
@@ -25,20 +53,29 @@ export async function insertPatientPackage(
 }
 
 /**
- * Updates an existing patient package assignment record.
+ * Updates an existing patient package assignment record. Writes the table,
+ * then re-reads the row from the view for the same reason as the insert
+ * above.
  */
 export async function updatePatientPackage(
   supabase: SupabaseClient<Database>,
   patientPackageId: string,
   patientPackage: UpdatePatientPackage
 ): Promise<PatientPackage> {
-  const { data, error } = await supabase
+  const { error: updateError } = await supabase
     .from("patient_packages")
     .update(patientPackage)
-    .eq("id", patientPackageId)
-    .select()
-    .single();
+    .eq("id", patientPackageId);
+  if (updateError) {
+    throw updateError;
+  }
 
+  const { data, error } = await supabase
+    .from("patient_packages_view")
+    .select("*")
+    .eq("id", patientPackageId)
+    .single()
+    .overrideTypes<PatientPackage, { merge: false }>();
   if (error) {
     throw error;
   }
@@ -53,11 +90,12 @@ export async function findPatientPackageById(
   patientPackageId: string
 ): Promise<PatientPackage | null> {
   const { data, error } = await supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("*")
     .eq("id", patientPackageId)
     .is("deleted_at", null)
-    .maybeSingle();
+    .maybeSingle()
+    .overrideTypes<PatientPackage, { merge: false }>();
 
   if (error) {
     throw error;
@@ -81,7 +119,7 @@ export async function listPatientPackagesByPatient(
   const to = from + filters.limit - 1;
 
   let query = supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("*")
     .eq("patient_id", patientId)
     .is("deleted_at", null);
@@ -92,7 +130,8 @@ export async function listPatientPackagesByPatient(
 
   const { data, error } = await query
     .order("created_at", { ascending: false })
-    .range(from, to);
+    .range(from, to)
+    .overrideTypes<PatientPackage[], { merge: false }>();
 
   if (error) {
     throw error;
@@ -111,7 +150,7 @@ export async function countPatientPackagesByPatient(
   }
 ): Promise<number> {
   let query = supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("id", { count: "exact", head: true })
     .eq("patient_id", patientId)
     .is("deleted_at", null);
@@ -145,7 +184,7 @@ export async function listOrganizationPatientPackages(
   const to = from + filters.limit - 1;
 
   let query = supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("*")
     .eq("organization_id", organizationId)
     .is("deleted_at", null);
@@ -160,7 +199,8 @@ export async function listOrganizationPatientPackages(
 
   const { data, error } = await query
     .order("created_at", { ascending: false })
-    .range(from, to);
+    .range(from, to)
+    .overrideTypes<PatientPackage[], { merge: false }>();
 
   if (error) {
     throw error;
@@ -180,7 +220,7 @@ export async function countOrganizationPatientPackages(
   }
 ): Promise<number> {
   let query = supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", organizationId)
     .is("deleted_at", null);
@@ -215,9 +255,10 @@ export async function listPatientPackagesByIds(
   }
 
   const { data, error } = await supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("*")
-    .in("id", patientPackageIds);
+    .in("id", patientPackageIds)
+    .overrideTypes<PatientPackage[], { merge: false }>();
 
   if (error) {
     throw error;
@@ -252,7 +293,7 @@ export async function existsPatientPackagesForPackage(
   packageId: string
 ): Promise<boolean> {
   const { count, error } = await supabase
-    .from("patient_packages")
+    .from("patient_packages_view")
     .select("id", { count: "exact", head: true })
     .eq("package_id", packageId);
 

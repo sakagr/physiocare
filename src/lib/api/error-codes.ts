@@ -109,6 +109,10 @@ export const ERROR_BEHAVIORS: Record<ErrorCode, ErrorBehaviorEntry> = {
     behavior: "toast",
     message: "This package has expired.",
   },
+  PACKAGE_CANCELLED: {
+    behavior: "toast",
+    message: "This package was cancelled and can't be used for a new session.",
+  },
   ORGANIZATION_LIMIT_EXCEEDED: {
     behavior: "toast",
     message: "You've reached your plan's limit.",

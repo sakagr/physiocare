@@ -181,9 +181,11 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
 - **Trigger:** a new patient presents, or an existing patient's details/records need updating.
 - **Steps:**
   1. Actor creates a patient with their details; system validates and creates the record.
-  2. Actor optionally attaches records (documents/scans); system stores them against the patient.
+  2. Actor optionally attaches records (documents/scans), choosing a record type from a fixed list: X-ray, MRI, CT scan, Ultrasound, Lab report, Prescription, Referral letter, Discharge summary, Consent form, Other. The list is client-side against a free-text column — an enum would make adding a type a migration, and free text would make the list unfilterable.
   3. Later, actor opens the patient to view or update details and records.
-- **Branches:** new patient vs. editing existing; with/without records; a possible duplicate (same name/phone) warns before creating; every write here — creating a patient, editing one, attaching a record — is rejected if the organization has no active subscription, while viewing stays available.
+- **Branches:** new patient vs. editing existing; with/without records; a possible duplicate (same name/phone) **warns but never blocks** — a clinic legitimately has two patients with one name, so the warning names the matches and links to them, and the actor decides; every write here — creating a patient, editing one, attaching or deleting a record — is rejected if the organization has no active subscription, while viewing stays available.
+- **Reception works the intake desk**, so they see and attach records for any patient in the organization, including one with no appointment yet — without that, this flow is impossible for its own primary actor. A physiotherapist stays scoped to patients they have an appointment with.
+- **Deleting a record is Owner/Admin only and is irreversible**: the stored file is destroyed along with the row, which is what makes it a real fix for a scan attached to the wrong patient. The row is retained as an audit trail, not as a restore point.
 - **End states:** *Success* — an active patient record with any documents. *Failure* — the patient create is aborted with no partial record; attaching a record is a separate operation, so its failure leaves the created patient intact and simply doesn't add the record (failure atomicity per conventions).
 
 ### 5. Schedule an appointment — Reception (Admin/Owner)
@@ -213,7 +215,7 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
   1. Actor assigns a package to the patient; system creates the patient-package with its session allotment and a validity period (an expiry date derived from the package's validity).
   2. As visits complete (Flow 6), sessions are consumed; system decrements the remaining count.
   3. Anyone with access views usage (consumed vs. remaining, and validity).
-- **Branches:** multiple concurrent packages are allowed; consumption is blocked once no sessions remain or after the package has **expired**, and a session can't be recorded twice for the same appointment; an assignment can't be removed once it has consumed sessions or an invoice.
+- **Branches:** multiple concurrent packages are allowed; consumption is blocked once no sessions remain, after the package has **expired**, or if it was **cancelled**, and a session can't be recorded twice for the same appointment; an assignment can't be removed once it has consumed sessions or an invoice.
 - **End states:** *Success* — active patient package with accurate tracked usage. *Failure* — assignment rejected.
 
 ### 8. Invoice & payment — Reception, Admin, Owner
@@ -241,7 +243,7 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
   3. **Maintain:** actor later changes the user's role, or deactivates/offboards them; system applies the change.
   4. **Reset password:** actor resets a user's password to a reveal-once temporary value, shared securely with the user — the recovery path for roles without a usable email (Physiotherapist, Reception; see Flow 2).
   5. **Compensation:** the Owner reviews and sets a user's compensation configuration; each set inserts a new time-versioned record rather than overwriting history, so past commission calculations remain stable after a rate change.
-- **Branches:** onboard vs. role change vs. deactivate vs. offboard vs. password reset; compensation view **and set** are Owner-only (Administrators do not see or set compensation, even though they otherwise manage users); deactivate is reversible, offboard is terminal (per destructive-action conventions); no caller may deactivate, offboard, or change the role of their own account, in any role.
+- **Branches:** onboard vs. role change vs. deactivate vs. offboard vs. password reset; compensation view **and set** are Owner-only (Administrators do not see or set compensation, even though they otherwise manage users); deactivate is reversible, offboard is terminal (per destructive-action conventions); no user, including `SUPER_ADMIN`, may deactivate, offboard, or change the role of their own account.
 - **End states:** *Success* — the user is in the intended lifecycle state, clinic-assigned as needed. *Failure* — blocked (e.g. a uniqueness conflict on email/username).
 
 ### 10. Manage clinics & user assignments — Owner/Admin
@@ -260,8 +262,9 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
 - **Steps:**
   1. Actor creates or edits a package (sessions, pricing, terms); system validates and saves.
   2. Actor activates or deactivates a package.
-- **Branches:** new vs. editing; activate vs. deactivate — deactivating a package with active assignments is blocked with an explanation; distinct from assigning a package to a patient (Flow 7).
-- **End states:** *Success* — the catalog reflects the intended offerings. *Failure* — blocked.
+- **Branches:** new vs. editing; activate vs. deactivate — deactivating a package that has been assigned to a patient is blocked with an explanation, on the same predicate that blocks deleting it; distinct from assigning a package to a patient (Flow 7).
+- **Consequence, accepted deliberately:** that predicate counts *every* assignment ever made, including ones since cancelled or deleted. So a package assigned even once can be neither deleted nor deactivated, and stays in the catalogue permanently — the only remaining lever is renaming it. Narrowing the check to genuinely-active assignments is a separate change, not made here.
+- **End states:** *Success* — the catalog reflects the intended offerings. *Failure* — blocked, with no safe alternative to offer: unlike most dependency-blocked removals, the usual fallback (deactivate instead of delete) is itself blocked, and the copy says so rather than pointing at a door that is also locked.
 
 ## Organization & oversight
 
@@ -272,7 +275,7 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
   1. Owner reviews and updates organization settings.
   2. Owner selects a plan and activates the subscription; renews later, before or after expiry.
   3. Plan limits and current usage are visible throughout.
-- **Branches:** first-time activation vs. renewal; as usage nears or reaches a plan limit, limit-enforcement states surface across affected areas (subscription-required / limit-exceeded).
+- **Branches:** first-time activation vs. renewal; as usage nears or reaches a plan limit, limit-enforcement states surface across affected areas (subscription-required / limit-exceeded). While no subscription is active, every write in the product is refused and every read still works — the organization can see all of its data and change none of it.
 - **End states:** *Success* — active subscription within limits. *Blocked* — an action prevented by a limit until the plan is renewed/upgraded.
 
 ### 13. Oversee activity — Owner/Admin; Physio (own report)
@@ -346,8 +349,8 @@ The scarce set of independent navigational destinations. List destinations host 
 | Destination | Purpose | Roles | Route | Feature | Phase |
 | --- | --- | --- | --- | --- | --- |
 | Dashboard | Role-aware landing with summary widgets and quick actions | All | `/app` | `dashboard` | F8 |
-| Patients | Browse patients; open a patient workspace | All | `/app/patients` | `patients` | F6 |
-| Patient Workspace | Focused workspace for one patient: overview, appointments, records, packages, invoices | All | `/app/patients/[id]` | `patients` | F6 |
+| Patients | Browse patients; open a patient workspace | All | `/app/patients` | `patients` | F5 |
+| Patient Workspace | Focused workspace for one patient: overview, records, packages. Appointments (F6) and invoices (F7) add their own tabs when those phases build them | All | `/app/patients/[id]` | `patients` | F5 |
 | Appointments (oversight) | Owner/Admin oversight & audit of appointments across staff and clinics; filter and review by date range. Not an operational page — daily viewing lives in the dashboard widget | Owner, Admin | `/app/appointments` | `appointments` | F6 |
 | Consultation | Clinical workspace for an appointment; hosts prescriptions | Physio | `/app/appointments/[id]/consultation` | `consultations` | F6 |
 | Attendance | Review staff attendance; feeds compensation & commission | Owner, Admin | `/app/attendance` | `attendance` | F6 |
@@ -359,7 +362,7 @@ The scarce set of independent navigational destinations. List destinations host 
 | Settings | Organization profile and subscription (tabs) | Owner, Admin | `/app/settings` | `organization` | F4 |
 | Audit Log | Browse the organization audit trail | Owner, Admin | `/app/audit-logs` | `audit` | F9 |
 
-**Patient Workspace layout (candidate):** a flexible split-screen / multi-column layout — a persistent patient summary and section nav in one column alongside a resizable working pane — is the leading candidate over plain tabs, keeping patient context in view while the clinician works. To be settled in the F6 spec.
+**Patient Workspace layout (settled in F5): a pinned summary header above a tab strip, not a split pane.** The split-screen candidate was written when the workspace was imagined with five sections; F5 owns three (Overview, Records, Packages), and a resizable pane spends horizontal room on navigation that a tab strip gives for free — while the pinned header already keeps patient context in view, which was the split's actual goal. The workspace takes its tabs as a prop, so F6 and F7 append theirs at the route without touching the shell. F5-scoped: worth revisiting once appointments and invoices make it a five-section surface again.
 
 ### Contextual surfaces (no route)
 
@@ -367,8 +370,8 @@ Hosted within a destination or the app shell, per the surface model.
 
 | Surface | Type | Hosted on | Roles | Feature | Phase |
 | --- | --- | --- | --- | --- | --- |
-| Create / Edit patient | Dialog | Patients, Dashboard | All | `patients` | F6 |
-| Patient records | Tab + upload Dialog | Patient Workspace | All | `patients` | F6 |
+| Create / Edit patient | Dialog | Patients, Dashboard | All | `patients` | F5 |
+| Patient records | Tab + upload Dialog | Patient Workspace | View & upload: Owner, Admin, Reception (organization-wide); Physio (only patients they have an appointment with). Delete: Owner, Admin | `patients` | F5 |
 | Package assignment & session usage | Tab + assign Dialog | Patient Workspace | Owner, Admin, Reception | `patient-packages` | F5 |
 | Appointments — today / upcoming | Dashboard widget + "view all" dialog; inline quick status actions on each row | Dashboard | All | `appointments` | F6 |
 | Appointment detail & status workflow | Drawer (page-level) | Patient Workspace, Appointments (oversight) | All | `appointments` | F6 |
@@ -437,13 +440,21 @@ The API returns `{ error, code }` for coded errors, `{ error, details }` for 400
 | Blocking message + resync | 409 state/transition · `INVALID_APPOINTMENT_STATUS_TRANSITION`, `INVALID_PAYMENT_STATUS_TRANSITION`, `INVALID_SUBSCRIPTION_TRANSITION`, `INVOICE_ALREADY_FINALIZED`, `PAYMENT_EXCEEDS_INVOICE_TOTAL`, `PAYMENT_ALREADY_EXISTS_FOR_INVOICE`, `PACKAGE_SESSIONS_EXHAUSTED`, `PACKAGE_EXPIRED`, `PACKAGE_CANCELLED`, `PACKAGE_SESSION_ALREADY_RECORDED`, `CONSULTATION_ALREADY_EXISTS`, `ATTENDANCE_ALREADY_RECORDED`, `ATTENDANCE_CHECK_IN_REQUIRED` | The record being acted on has itself moved. Explain why the action can't proceed in context, then refetch so the now-stale UI reflects current state. No field to blame. Contrast with **dependency-blocked**, below: there, nothing about the record in view has changed; and with **prohibited action**, which never clears at all. |
 | Dependency-blocked | 409 referential · `PACKAGE_HAS_ACTIVE_ASSIGNMENTS`, `PATIENT_PACKAGE_HAS_REFERENCES`, `PATIENT_HAS_DEPENDENT_RECORDS` | Another record references this one; the record in view is unchanged and accurate, so there's nothing to resync. Explain in context and offer the safe alternative where one exists (e.g. deactivate instead of delete) — see *Destructive & irreversible actions*. Contrast with **blocking message + resync**, above: there, the record itself moved; and with **prohibited action**, below, where there is no alternative to offer. |
 | Prohibited action | 409 permanent · `TARGET_USER_IS_SELF` | The action is never permitted, in any state — not a conflict that clears. Explain in context; no refetch (nothing has changed), no retry affordance, and no alternative to offer. Distinct from **blocking message + resync** (there, the record moved and a refetch helps) and **dependency-blocked** (there, a safe alternative usually exists). |
-| Limit / subscription enforcement | 402 · `SUBSCRIPTION_REQUIRED`; 403 · `ORGANIZATION_LIMIT_EXCEEDED` | Dedicated enforcement state: state the limit and its resolution (renew / upgrade) for the Owner; other roles see a softer "ask your owner" message. |
+| Limit / subscription enforcement | 402 · `SUBSCRIPTION_REQUIRED`; 403 · `ORGANIZATION_LIMIT_EXCEEDED` | Dedicated enforcement state: state the limit and its resolution (renew / upgrade) for the Owner; other roles see a softer "ask your owner" message. **Where it goes** is settled by the rule below the table: form dialogs render it inline, confirms and inline row actions take the flat toast. |
 | Non-field request error | 400 · invalid payload, `REPORT_ROW_LIMIT_EXCEEDED` | Toast; for the row limit, guidance to narrow the filters / date range. |
 | Unexpected error | 500 · internal, network failure | Toast "Something went wrong" with a retry; error logged. Handled globally. |
 
-**F3 note:** the create-user and create-clinic dialogs do not yet build the dedicated enforcement state above — they use the generic 402/403 toast (this table's default), with no per-screen message and no Owner/other-role distinction, and the dialog simply stays open with input intact. This is a deliberate interim, not an oversight: F4 owns *Subscription Plan Selection*, *Activation & Renewal*, and *Limit Enforcement States*, and replaces this generic toast with the role-varying dedicated state described above.
+**Which surface gets which treatment.** Every write path an unsubscribed organization can attempt throws `SUBSCRIPTION_REQUIRED` (`AGENTS.md` → *Subscription Principles* → *The write/read boundary*) — roughly forty service functions. Enumerating the adopting surfaces here is untenable at that count and rots on contact, so the rule is stated instead:
 
-**F4 note:** every write path an unsubscribed organization can attempt throws `SUBSCRIPTION_REQUIRED` (`AGENTS.md` → *Subscription Principles* → *The write/read boundary*) — roughly forty service functions, deliberately not enumerated here. The dedicated enforcement state above is adopted at exactly two of them so far: create-user and create-clinic (`organization.service.ts`), which are also the only two `ORGANIZATION_LIMIT_EXCEEDED` sites. Every other surface still shows the F3-era generic toast. This is a deliberate scope boundary, not an oversight: F4 owns the component and its first adoption; F5–F7 adopt it at the patient, package, appointment, clinical, and billing surfaces they each build.
+> **A form dialog over a gated write renders the dedicated enforcement state. A confirmation dialog or an inline row action renders the flat toast.**
+
+The distinction is the **surface**, not the verb: whether it stays open long enough to host a persistent, role-aware message. A form dialog does — it keeps the user's input, so the message sits above the footer and the work is not lost. A confirm has no input to preserve and closes on its own; a toast plus a closed confirm is the honest outcome there. This applies to edits as much as creates: one dialog serving create and edit through one mutation gets the state on both paths, which is already how the clinic, patient, and package form dialogs behave.
+
+`ORGANIZATION_LIMIT_EXCEEDED` is narrower — it is thrown only by create-user and create-clinic — and follows the same rule, both being form dialogs.
+
+**What this already governs, unbuilt:** reschedule appointment, correct attendance, edit invoice, edit consultation, edit prescription, and change role are all form dialogs over gated writes, so F6 and F7 adopt the dedicated state at each without re-deciding. Cancel appointment, void invoice, and the other destructive confirms take the toast by the same rule.
+
+**Historical:** F3 shipped create-user and create-clinic on a generic 402/403 toast with no role distinction — a deliberate interim, since F4 owned the component. F4 built it and adopted it at those two sites; F5 adopted it across the patient, record, package, and assignment form dialogs and settled the rule above.
 
 ## Mutation feedback
 
@@ -455,7 +466,7 @@ Actions that remove access, remove data, or can't be casually undone (delete, de
 
 - **Confirm with consequence, not "Are you sure?".** The confirmation names the specific target and the effect ("Deactivate Dr. Menon? They lose access until reactivated."), and its confirm button carries the action's verb and danger styling.
 - **Weight matches reversibility.** Most removals are soft (deactivate / archive via soft-delete) and reversible — a standard confirm suffices, and the success toast may offer **Undo**. Truly irreversible or high-blast-radius actions (hard delete, user offboarding, cancelling an appointment with downstream effects) use a stronger confirmation and do not offer Undo.
-- **Dependency-blocked removals are explained, not hidden.** When a record can't be removed because it has dependents (`PATIENT_HAS_DEPENDENT_RECORDS`, `PACKAGE_HAS_ACTIVE_ASSIGNMENTS`, `PATIENT_PACKAGE_HAS_REFERENCES`), show the blocking message from the error table and offer the safe alternative where one exists (e.g. deactivate instead of delete).
+- **Dependency-blocked removals are explained, not hidden.** When a record can't be removed because it has dependents (`PATIENT_HAS_DEPENDENT_RECORDS`, `PACKAGE_HAS_ACTIVE_ASSIGNMENTS`, `PATIENT_PACKAGE_HAS_REFERENCES`), show the **dependency-blocked** treatment from the error table (no refetch — the record in view didn't change) and offer the safe alternative where one exists (e.g. deactivate instead of delete).
 - **Placement & styling.** Destructive controls use the danger role color and are separated from primary/confirm affordances so they are not triggered by accident; they remain capability-gated like any action.
 - **Feedback.** Pessimistic — await the server, then confirm via toast and reflect the new state (the item leaves the list or shows as inactive).
 

@@ -18,10 +18,14 @@ import { z } from "zod";
  */
 export const CAPABILITIES = [
   "patients:view",
+  "patients:manage",
+  "patientRecords:delete",
   "appointments:oversee",
   "attendance:oversee",
   "invoices:access",
   "packages:view",
+  "packages:manage",
+  "patientPackages:manage",
   "reports:view",
   "users:manage",
   "clinics:manage",

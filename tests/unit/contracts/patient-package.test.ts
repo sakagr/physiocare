@@ -25,6 +25,8 @@ const patientPackageFixture = {
   purchased_on: "2026-01-01",
   expiry_date: "2026-07-01",
   extended_validity_to: null,
+  cancelled_at: null,
+  cancelled_by: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   deleted_at: null,

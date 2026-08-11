@@ -50,6 +50,47 @@ describeIntegration("Package lifecycle", () => {
     expect(error).toBeNull();
 
     await expect(deletePackage(ctx.admin, owner.id, pkg.id)).rejects.toMatchObject({ code: ErrorCodes.PACKAGE_HAS_ACTIVE_ASSIGNMENTS });
+    // Deactivation is blocked on the same predicate, so an assigned package
+    // can be neither removed nor withdrawn from the catalogue (UX.md Flow 11).
+    await expect(deactivatePackage(ctx.admin, owner.id, pkg.id)).rejects.toMatchObject({ code: ErrorCodes.PACKAGE_HAS_ACTIVE_ASSIGNMENTS });
+  });
+
+  it("still deactivates a package that has never been assigned", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-unassigned-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "unassigned-owner");
+    const pkg = await createPackage(ctx.admin, owner.id, validPackageInput(`${ctx.runId}-unassigned`));
+
+    expect((await deactivatePackage(ctx.admin, owner.id, pkg.id)).is_active).toBe(false);
+  });
+
+  it("writes audit entries for every catalogue write", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-package-audit-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "package-audit-owner");
+    const pkg = await createPackage(ctx.admin, owner.id, validPackageInput(`${ctx.runId}-package-audit`));
+    await updatePackage(ctx.admin, owner.id, pkg.id, { packagePrice: 7000 });
+    await deactivatePackage(ctx.admin, owner.id, pkg.id);
+    await activatePackage(ctx.admin, owner.id, pkg.id);
+    await deletePackage(ctx.admin, owner.id, pkg.id);
+
+    const { data: entries } = await ctx.admin
+      .from("audit_logs")
+      .select("action, entity_name, old_data, new_data")
+      .eq("entity_id", pkg.id)
+      .order("created_at", { ascending: true });
+
+    // Lifecycle transitions get their own verbs so an auditor can tell them
+    // apart from a field change without diffing snapshots.
+    expect((entries ?? []).map((entry) => entry.action)).toEqual([
+      "create",
+      "update",
+      "deactivate",
+      "activate",
+      "delete",
+    ]);
+    expect(entries?.every((entry) => entry.entity_name === "packages")).toBe(true);
+    expect(entries?.[0].new_data).toMatchObject({ package_name: pkg.package_name });
+    expect(entries?.[2].new_data).toMatchObject({ is_active: false });
+    expect(entries?.[3].new_data).toMatchObject({ is_active: true });
   });
 
   it("returns only active packages through paginated and searchable repository queries", async () => {

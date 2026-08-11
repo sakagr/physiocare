@@ -10810,6 +10810,26 @@
                         }
                       ]
                     },
+                    "cancelled_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cancelled_by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -10841,6 +10861,8 @@
                     "purchased_on",
                     "expiry_date",
                     "extended_validity_to",
+                    "cancelled_at",
+                    "cancelled_by",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -10999,6 +11021,26 @@
                         }
                       ]
                     },
+                    "cancelled_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cancelled_by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -11030,6 +11072,8 @@
                     "purchased_on",
                     "expiry_date",
                     "extended_validity_to",
+                    "cancelled_at",
+                    "cancelled_by",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -11178,6 +11222,26 @@
                         }
                       ]
                     },
+                    "cancelled_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cancelled_by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -11209,6 +11273,8 @@
                     "purchased_on",
                     "expiry_date",
                     "extended_validity_to",
+                    "cancelled_at",
+                    "cancelled_by",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -11565,6 +11631,26 @@
                         }
                       ]
                     },
+                    "cancelled_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cancelled_by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -11596,6 +11682,8 @@
                     "purchased_on",
                     "expiry_date",
                     "extended_validity_to",
+                    "cancelled_at",
+                    "cancelled_by",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -11785,6 +11873,26 @@
                               }
                             ]
                           },
+                          "cancelled_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cancelled_by": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "created_at": {
                             "type": "string"
                           },
@@ -11816,6 +11924,8 @@
                           "purchased_on",
                           "expiry_date",
                           "extended_validity_to",
+                          "cancelled_at",
+                          "cancelled_by",
                           "created_at",
                           "updated_at",
                           "deleted_at"
@@ -11999,6 +12109,16 @@
                     "updated_at": {
                       "type": "string"
                     },
+                    "deleted_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "downloadUrl": {
                       "type": "string"
                     }
@@ -12014,7 +12134,169 @@
                     "notes",
                     "created_at",
                     "updated_at",
+                    "deleted_at",
                     "downloadUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Not found."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a patient record",
+        "description": "Soft-deletes the row and removes the Storage object. ORG_OWNER/ORG_ADMIN only; not reversible.",
+        "tags": [
+          "Patients"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Patient ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "recordId",
+            "in": "path",
+            "required": true,
+            "description": "Patient record ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient record deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organization_id": {
+                      "type": "string"
+                    },
+                    "patient_id": {
+                      "type": "string"
+                    },
+                    "uploaded_by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "record_type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "file_url": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "deleted_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organization_id",
+                    "patient_id",
+                    "uploaded_by",
+                    "record_type",
+                    "title",
+                    "file_url",
+                    "notes",
+                    "created_at",
+                    "updated_at",
+                    "deleted_at"
                   ]
                 }
               }
@@ -12186,6 +12468,16 @@
                     },
                     "updated_at": {
                       "type": "string"
+                    },
+                    "deleted_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -12198,7 +12490,8 @@
                     "file_url",
                     "notes",
                     "created_at",
-                    "updated_at"
+                    "updated_at",
+                    "deleted_at"
                   ]
                 }
               }
@@ -12391,6 +12684,16 @@
                           "updated_at": {
                             "type": "string"
                           },
+                          "deleted_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "downloadUrl": {
                             "type": "string"
                           }
@@ -12406,6 +12709,7 @@
                           "notes",
                           "created_at",
                           "updated_at",
+                          "deleted_at",
                           "downloadUrl"
                         ]
                       }
@@ -17805,10 +18109,14 @@
                         "type": "string",
                         "enum": [
                           "patients:view",
+                          "patients:manage",
+                          "patientRecords:delete",
                           "appointments:oversee",
                           "attendance:oversee",
                           "invoices:access",
                           "packages:view",
+                          "packages:manage",
+                          "patientPackages:manage",
                           "reports:view",
                           "users:manage",
                           "clinics:manage",

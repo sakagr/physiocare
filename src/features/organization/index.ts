@@ -5,4 +5,10 @@
  */
 export { organizationQueryKeys, organizationDetailQueryOptions, subscriptionPlansQueryOptions } from "./queries";
 export { SettingsPageContent } from "./components/settings-page-content";
-export { LimitEnforcementState, type LimitEnforcementCode, type LimitEnforcementStateProps } from "./components/limit-enforcement-state";
+export {
+  LimitEnforcementState,
+  LIMIT_ENFORCEMENT_CODES,
+  limitEnforcementCode,
+  type LimitEnforcementCode,
+  type LimitEnforcementStateProps,
+} from "./components/limit-enforcement-state";

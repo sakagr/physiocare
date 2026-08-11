@@ -24,6 +24,8 @@ export const patientPackageSchema = z.object({
   purchased_on: z.string(),
   expiry_date: z.string(),
   extended_validity_to: z.string().nullable(),
+  cancelled_at: z.string().nullable(),
+  cancelled_by: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   deleted_at: z.string().nullable(),

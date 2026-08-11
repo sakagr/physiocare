@@ -133,4 +133,38 @@ describeIntegration("Patient package assignment lifecycle", () => {
     expect(orgList.items).toHaveLength(1);
     expect(orgList.items[0].status).toBe("expired");
   });
+
+  it("writes audit entries naming the assignment lifecycle transition that happened", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-assignment-audit-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "assignment-audit-owner");
+    const pkg = await createPackage(ctx.admin, owner.id, validPackageInput(`${ctx.runId}-assignment-audit`));
+    const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-assignment-audit`));
+
+    const assignment = await createPatientPackage(
+      ctx.admin,
+      owner.id,
+      validPatientPackageInput({ patientId: patient.id, packageId: pkg.id })
+    );
+    await updatePatientPackage(ctx.admin, owner.id, assignment.id, { extendedValidityTo: "2030-01-01" });
+    await updatePatientPackage(ctx.admin, owner.id, assignment.id, { status: "cancelled" });
+    await deletePatientPackage(ctx.admin, owner.id, assignment.id);
+
+    const { data: entries } = await ctx.admin
+      .from("audit_logs")
+      .select("action, entity_name, old_data, new_data")
+      .eq("entity_id", assignment.id)
+      .order("created_at", { ascending: true });
+
+    // updatePatientPackage is one function serving two intents; each emits its
+    // own verb rather than a shared "update".
+    expect((entries ?? []).map((entry) => entry.action)).toEqual([
+      "create",
+      "extend_validity",
+      "cancel",
+      "delete",
+    ]);
+    expect(entries?.every((entry) => entry.entity_name === "patient_packages")).toBe(true);
+    expect(entries?.[1].new_data).toMatchObject({ extended_validity_to: "2030-01-01" });
+    expect(entries?.[2].new_data).toMatchObject({ status: "cancelled" });
+  });
 });

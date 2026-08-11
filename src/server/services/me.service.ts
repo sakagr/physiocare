@@ -13,10 +13,14 @@ import { listClinicsByUser } from "../repositories/user-clinic.repository";
 import { AppError, ErrorCodes } from "../errors";
 import {
   canViewPatients,
+  canManagePatients,
+  canDeletePatientRecords,
   canOverseeAppointments,
   canOverseeAttendance,
   canManageInvoices,
   canViewPackages,
+  canManagePackages,
+  canManagePatientPackages,
   canViewReports,
   canManageUsers,
   canManageClinics,
@@ -41,10 +45,14 @@ const CAPABILITY_PREDICATES: Record<
   (supabase: SupabaseClient<Database>, userId: string) => Promise<boolean>
 > = {
   "patients:view": canViewPatients,
+  "patients:manage": canManagePatients,
+  "patientRecords:delete": canDeletePatientRecords,
   "appointments:oversee": canOverseeAppointments,
   "attendance:oversee": canOverseeAttendance,
   "invoices:access": canManageInvoices,
   "packages:view": canViewPackages,
+  "packages:manage": canManagePackages,
+  "patientPackages:manage": canManagePatientPackages,
   "reports:view": canViewReports,
   "users:manage": canManageUsers,
   "clinics:manage": canManageClinics,
@@ -66,10 +74,14 @@ const CAPABILITY_PREDICATES: Record<
  */
 export const ORG_CAPABILITIES: readonly Capability[] = [
   "patients:view",
+  "patients:manage",
+  "patientRecords:delete",
   "appointments:oversee",
   "attendance:oversee",
   "invoices:access",
   "packages:view",
+  "packages:manage",
+  "patientPackages:manage",
   "reports:view",
   "users:manage",
   "clinics:manage",

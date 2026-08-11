@@ -18,6 +18,7 @@ export const patientRecordSchema = z.object({
   notes: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
+  deleted_at: z.string().nullable(),
 });
 
 /**

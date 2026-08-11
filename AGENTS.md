@@ -601,8 +601,6 @@ The following rules apply:
 - Trial or paid subscriptions begin only when explicitly activated by the business workflow.
 - Organization onboarding must not contain subscription or billing logic.
 
----
-
 ### The write/read boundary
 
 `canOrganizationTransact` (`authorization.service.ts`) decides whether an organization may write at all, independent of who the caller is or what they're trying to do. Gated call sites use its throwing form, `assertOrganizationCanTransact` — one helper across every site so the error code and message cannot drift.
@@ -662,9 +660,6 @@ Anchor the gate on the organization the write lands in. Most call sites already 
 
 ---
 
-
----
-
 ## Unsubscribed Organization Write Enforcement
 
 - **Scope:** Backend — prerequisite for frontend phase F5.
@@ -690,6 +685,36 @@ Anchor the gate on the organization the write lands in. Most call sites already 
 - **Reference:** `assertOrganizationCanTransact` (`authorization.service.ts`) and its forty call sites; `tests/integration/subscription-gate-matrix.test.ts` enumerates every one — a gate with no row there is untested, and a new gated write should add a row. ADR-0012 (historical — its context paragraph enumerating "seven call sites" and "the other five `SUBSCRIPTION_REQUIRED` sites" was accurate when written and describes the state before this decision, not current reality).
 
 ---
+
+## Patient Record Access and F5 Capability Vocabulary
+
+- **Scope:** Backend + docs — F5.
+- **Context:** `canViewPatientRecords` (`authorization.service.ts`) scoped `ORG_RECEPTIONIST` to patients with an appointment at a clinic they were assigned to, which made `UX.md` Flow 4's documented intake path impossible for its own primary actor: Reception creates the patient and attaches the first scans *before* any appointment exists, then could not read back what it had just uploaded. Separately, the capability vocabulary had view tokens for patients and packages but no manage-tier token for any F5 domain, so no F5 write affordance could be gated client-side; `patient_records` had no `deleted_at` at all, making a scan attached to the wrong patient the one clinical write with no correction path; and `deactivatePackage` did not implement the block Flow 11 documented.
+- **Decision:**
+
+  **(a) Reception is widened to organization-wide, in the predicate *and* in the RLS select and update policies** (plus the two `storage.objects` policies that mirror them). The predicate change alone would not have been a partial delivery — it would have been a regression: `listPatientRecords` reads through the caller's session-scoped client, so a widened predicate against an unchanged policy returns **zero rows rather than a refusal**. That is the same failure mode ADR-0011 recorded for `user_compensations`, in the opposite direction: an authorization boundary living in RLS *filters* when a predicate disagrees with it, it does not *error*. That precedent is why the policy change is part of this decision rather than a follow-up. The **physiotherapist appointment boundary is retained deliberately** — a clinical boundary, not an oversight — in predicate and policy alike, is now documented in `UX.md`, and is pinned by an integration test that reads through a real session client so a future policy sweep cannot quietly drop it.
+
+  The two storage policies are widened even though they are not in the app's request path (uploads and signed-URL creation both go through the admin client, which bypasses storage RLS). They are the backstop for direct object access, and leaving them narrower would leave a policy contradicting the boundary this decision establishes — at no behavioural cost.
+
+  **(b) Four capability tokens are added**, each mapped 1:1 onto a predicate: `patients:manage` → `canManagePatients`, `packages:manage` → `canManagePackages`, `patientPackages:manage` → `canManagePatientPackages`, and `patientRecords:delete` → `canDeletePatientRecords`. **No ADR, deliberately:** ADR-0011 and ADR-0012 each existed to resolve a *tension* between a coarse token and a narrower boundary, and each had to explain why the boundary moved. These four resolve no such tension — they are vocabulary additions over predicates whose role sets are unchanged. That precedent is declined on its own terms, not overlooked.
+
+  **(c) `deactivatePackage` blocks on existing assignments**, on the same predicate `deletePackage` already used, matching Flow 11.
+
+  **(d) Patient records gain `deleted_at` and an Owner/Admin soft delete** (the forty-first subscription gate). `canDeletePatientRecords` is `ORG_MANAGEMENT_ROLES` — deliberately narrower than the manage predicate that admits Reception and appointment-linked physiotherapists, mirroring `canCorrectPackageSessionUsage`: destroying a record is a different act from creating one. **The Storage object is removed along with the row.** A soft delete that left the file in place would not fix the misfiled-scan case the decision exists for, since the storage policies grant on the patient folder in the object path. Ordering is row first, then object, matching `createPatientRecord`'s existing compensation asymmetry. A hard delete was not an option: `patient_records_delete_policy` is `is_super_admin()` only, so an Owner's delete would have silently affected zero rows.
+
+  **(e) Audit logging becomes standard for everything F5 builds** — see *Audit Logging* — via a new `recordAuditLogSafe`, at fourteen call sites across twelve functions. `recordAuditLogSafe` inserts **without reading the row back**: `audit_logs_insert_policy` admits any org member but `audit_logs_select_policy` admits only Owner/Admin, so an `insert().select()` through a receptionist's session client commits the row and then returns nothing — warning on a write that had in fact succeeded.
+
+- **Also fixed in passing:** `createPatient`'s audit call sat inside the patient-code retry loop, whose `catch` treats any unique violation as a code collision — so a unique violation raised by the audit insert would have been retried and created a **second patient row** for one create call. The call moves outside the loop (and onto `recordAuditLogSafe`). A pre-existing defect, not a consequence of the audit work.
+- **Consequences:** `existsPatientPackagesForPackage` filters neither `deleted_at` nor `status`, so a package assigned even once can now be **neither deleted nor deactivated** and remains in the catalogue permanently — accepted as the cost of matching Flow 11; narrowing that predicate is explicitly not attempted here, and it is declared in the soft-delete exemption list as accepted behaviour rather than an oversight.
+
+  `existsPatientRecordForPatient` gains a `deleted_at` filter, which also loosens patient deletion: a patient whose only record was deleted becomes deletable. Without it the block would cite records that no longer exist.
+
+  Because the Storage object is removed while the row is retained, a soft-deleted record's `file_url` points at nothing and **the delete is not practically reversible**. The row is an audit trail, not a restore point, and nothing in the product offers to restore it. The audit entry's `old_data` snapshot is therefore the only surviving trace of the document — `file_url` included, since that is what ties the entry to storage-level logs and backups.
+
+  Full row snapshots duplicate patient data into `audit_logs` — names, phones, emails, addresses, and record titles and notes — and `audit_logs` has no retention bound today. `ROADMAP.md` R11's *Data Retention & Audit Log Archival Strategy* is where that gets bounded; the growth is recorded here rather than left unremarked. `audit_logs` RLS is strictly more restrictive than every table it snapshots (Owner/Admin only, append-only by the absence of update/delete policies), so the trail narrows access rather than widening it.
+
+  The RLS policies deliberately do **not** filter `deleted_at`; no policy in this schema filters its own table's soft-delete column, and the repository layer remains the single place that decides which rows are live. That rule is now written down in *Soft Delete Strategy* → *Where liveness is enforced* and guarded by `tests/unit/soft-delete-liveness.test.ts`.
+- **Reference:** `20260804000000_patient_records_front_desk_access.sql` and `20260804000100_patient_records_soft_delete.sql`; `canViewPatientRecords` / `canDeletePatientRecords` (`authorization.service.ts`); `me.contract.ts`; `recordAuditLogSafe` (`audit-log.service.ts`); ADR-0011 (for the RLS-filters-rather-than-errors precedent). ADR-0012 (historical — its context paragraph points at `UX.md`'s F4 note on the enforcement table, which this decision replaced with the *Which surface gets which treatment* rule; that pointer was accurate when written and describes the state before this decision, not current reality).
 
 ---
 
@@ -1341,6 +1366,7 @@ Rules:
 - Primary validation and user-facing error messages still belong in the calling service, checked *before* invoking the function. The function's internal checks are a concurrency safety net, not the primary validation path — the same role a `CHECK` constraint already plays elsewhere in this schema.
 - The function raises a plain `raise exception` with a fixed, matchable message on its internal safety-net failures; the calling repository/service maps that message back to the same `AppError` code the pre-check would have thrown, so callers never see a raw Postgres error.
 - Repository functions that call `.rpc(...)` follow the same conventions as any other repository method (check `error`, throw on unexpected failure, return `data`) — invoking a stored function is still a persistence concern, not business logic.
+- A function that both enforces a structural-integrity invariant and separately writes a derivable business value (for example, setting a status alongside a counter update) is a signal the value should be derived on read instead — removing that write, rather than defending it, is usually the fix.
 
 ---
 
@@ -1425,6 +1451,29 @@ Rules:
 - Soft deleted records remain part of system history.
 - Reactivation should reuse existing records whenever possible.
 - Hard deletes should be exceptional administrative operations.
+
+## Where liveness is enforced
+
+Liveness is enforced at the **repository layer**, not in RLS. No policy filters its own table's `deleted_at`; every repository read of a soft-deletable table carries an explicit `.is("deleted_at", null)`. The division is: **RLS enforces tenancy and role; the service and repository layers enforce lifecycle.**
+
+Putting liveness in RLS would place the rule in two places that must then agree, and would make any legitimate read of deleted rows — audit, export, restore, uniqueness checks against retired records — a policy change rather than a query change. ADR-0011 records what a boundary living only in RLS costs: it *filters* rather than *errors*, so a disagreeing predicate produces an empty result instead of a refusal.
+
+A read that genuinely needs deleted rows declares itself in the exemption list in `tests/unit/soft-delete-liveness.test.ts`, keyed `file#function` with a one-line reason. The guard fails on any unfiltered read that is not declared, so the list is the complete inventory of where lifecycle filtering is deliberately absent — adding to it is a decision, not a workaround. Entries marked `PENDING_R9` are reads that were unfiltered before the guard existed and have not yet been judged; they are not claims that the absence is correct.
+
+---
+
+# Audit Logging
+
+Every create, lifecycle transition, and delete in a phase's own surface area writes an audit entry. Coverage before F5 was a deliberate starter set (D15: enough to validate the mechanism); F5 covers everything it builds, and the pre-F5 features are retrofitted in R9.
+
+Rules:
+
+- **Payload is a full row snapshot.** `newData` on create, both `oldData` and `newData` on update, `oldData` on delete. Every one of these operations already resolves the row before writing, so the snapshot is the value in scope — no extra query.
+- **`entityName` is the table name** (`patients`, `packages`, `patient_packages`, `patient_records`), matching the existing sites.
+- **Action strings distinguish kinds of change.** Generic CRUD verbs (`create`, `update`, `delete`) mean fields changed; domain verbs (`activate`, `deactivate`, `cancel`, `extend_validity`, and `subscription.service.ts`'s own set) mean a lifecycle transition happened. An auditor filtering one `entityName` can then tell them apart without diffing snapshots. Where one function serves two intents, it emits the verb for the intent that actually ran.
+- **A failed audit never fails the operation.** The mutation has already committed and no transaction spans both writes, so use `recordAuditLogSafe`, which swallows and warns. `recordAuditLog` still throws and is left for the pre-F5 call sites until R9.
+- **The warning carries identifiers and the error only — never the payload.** Logs are not access-controlled; `audit_logs` is (Owner/Admin). A full row snapshot of a patient or a patient record carries personal and clinical data and must not be spilled into stdout.
+- **Do not put an audit call inside a `try` whose `catch` means something else.** `createPatient`'s retry loop interprets any unique violation as a patient-code collision; an audit insert in that block would have been retried and produced a second patient row.
 
 ---
 

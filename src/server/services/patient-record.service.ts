@@ -7,9 +7,16 @@ import {
   findPatientRecordById,
   listPatientRecordsByPatient,
   countPatientRecordsByPatient,
+  softDeletePatientRecord,
 } from "../repositories/patient-record.repository";
 import { findPatientById } from "../repositories/patient.repository";
-import { canViewPatientRecords, canManagePatientRecords, assertOrganizationCanTransact } from "./authorization.service";
+import {
+  canViewPatientRecords,
+  canManagePatientRecords,
+  canDeletePatientRecords,
+  assertOrganizationCanTransact,
+} from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePatientRecordInput } from "../validators/patient-record.validator";
@@ -94,8 +101,9 @@ export async function createPatientRecord(
     throw uploadError;
   }
 
+  let record: PatientRecord;
   try {
-    return await insertPatientRecord(supabase, {
+    record = await insertPatientRecord(supabase, {
       organization_id: patient.organization_id,
       patient_id: patient.id,
       uploaded_by: callerUserId,
@@ -112,6 +120,86 @@ export async function createPatientRecord(
     }
     throw error;
   }
+
+  // Outside the try above: its catch compensates a failed insert by removing
+  // the uploaded object, and the row exists by the time this runs.
+  await recordAuditLogSafe(supabase, {
+    organizationId: patient.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "patient_records",
+    entityId: record.id,
+    newData: record,
+  });
+
+  return record;
+}
+
+/**
+ * Soft-deletes a patient record and removes its Storage object.
+ *
+ * The row is the audit trail; the file is the payload. Removing only the row
+ * would leave a misfiled scan at <organization>/<wrong-patient>/... in a
+ * bucket whose policies grant on the patient folder in the path -- still
+ * reachable by exactly the people who should not see it. So the object goes
+ * too, which makes the soft delete **not practically reversible**: the
+ * retained row's file_url points at an object that no longer exists. The row
+ * is kept for audit -- who uploaded what, and when it was removed -- not as a
+ * restore point, and nothing in the product offers to restore it.
+ *
+ * The audit entry's old_data snapshot is therefore the only surviving trace
+ * of the document, file_url included: it is what ties the entry to
+ * storage-level logs and backups.
+ *
+ * Ordering is row first, then object. If the removal fails, the record is
+ * already soft-deleted and an orphaned object remains -- a monitoring
+ * concern, and the same asymmetry createPatientRecord's compensation path
+ * already accepts. The inverse order is worse: a failed row update after a
+ * successful removal leaves a live record pointing at a file that is gone.
+ */
+export async function deletePatientRecord(
+  supabase: SupabaseClient<Database>,
+  adminClient: SupabaseClient<Database>,
+  callerUserId: string,
+  patientId: string,
+  recordId: string
+): Promise<PatientRecord> {
+  const isAuthorized = await canDeletePatientRecords(supabase, callerUserId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  const patient = await findPatientById(supabase, patientId);
+  if (!patient) {
+    throw new AppError("Patient not found", ErrorCodes.NOT_FOUND);
+  }
+
+  // Resource-anchored for the same reason as createPatientRecord above.
+  await assertOrganizationCanTransact(supabase, patient.organization_id);
+
+  const record = await findPatientRecordById(supabase, recordId);
+  if (!record || record.patient_id !== patientId) {
+    throw new AppError("Patient record not found", ErrorCodes.NOT_FOUND);
+  }
+
+  const deleted = await softDeletePatientRecord(supabase, recordId);
+
+  try {
+    await adminClient.storage.from(STORAGE_BUCKET).remove([record.file_url]);
+  } catch {
+    // TODO: Introduce centralized monitoring/alerting for compensation failures.
+  }
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: patient.organization_id,
+    userId: callerUserId,
+    action: "delete",
+    entityName: "patient_records",
+    entityId: record.id,
+    oldData: record,
+  });
+
+  return deleted;
 }
 
 /**

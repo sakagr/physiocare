@@ -778,10 +778,14 @@ export async function getAccessibleClinicIds(
 
 /**
  * Checks if a caller may view a patient's uploaded records.
- * - ORG_OWNER/ORG_ADMIN: any patient within their organization.
- * - ORG_RECEPTIONIST: patients with an appointment at an accessible clinic.
+ * - ORG_OWNER/ORG_ADMIN/ORG_RECEPTIONIST: any patient within their organization.
  * - ORG_PHYSIOTHERAPIST: patients they have an appointment with.
  * - Other roles: no access.
+ *
+ * The same boundary is enforced in patient_records_select_policy and
+ * patient_records_update_policy. Widening one without the other does not
+ * produce a refusal -- RLS filters rather than errors, so the caller would
+ * see an empty list (ADR-0011).
  */
 export async function canViewPatientRecords(
   supabase: SupabaseClient<Database>,
@@ -800,20 +804,21 @@ export async function canViewPatientRecords(
 
   if (roleRecord.name === "ORG_OWNER" || roleRecord.name === "ORG_ADMIN") return true;
 
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("clinic_id, physiotherapist_id")
-    .eq("patient_id", patientId)
-    .is("deleted_at", null);
-  if (error) throw error;
+  // Reception works the intake desk: they create the patient and attach the
+  // first scans before any appointment exists (UX.md Flow 4). Scoping them to
+  // patients with an appointment made that documented flow impossible.
+  // Physiotherapists stay appointment-scoped -- a clinical boundary, not an
+  // oversight: a physio sees records for patients they actually treat.
+  if (roleRecord.name === "ORG_RECEPTIONIST") return true;
 
   if (roleRecord.name === "ORG_PHYSIOTHERAPIST") {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("physiotherapist_id")
+      .eq("patient_id", patientId)
+      .is("deleted_at", null);
+    if (error) throw error;
     return data.some((appointment) => appointment.physiotherapist_id === callerUserId);
-  }
-
-  if (roleRecord.name === "ORG_RECEPTIONIST") {
-    const accessibleClinicIds = await getAccessibleClinicIds(supabase, callerUserId);
-    return data.some((appointment) => accessibleClinicIds.includes(appointment.clinic_id));
   }
 
   return false;
@@ -829,6 +834,21 @@ export async function canManagePatientRecords(
   patientId: string
 ): Promise<boolean> {
   return canViewPatientRecords(supabase, callerUserId, patientId);
+}
+
+/**
+ * Checks if a caller may delete a patient record. Deliberately narrower than
+ * canManagePatientRecords, which admits Reception and appointment-linked
+ * physiotherapists: destroying a record is a different act from creating one,
+ * and the delete takes the Storage object with it. Same reasoning as
+ * canCorrectPackageSessionUsage, which is likewise narrower than its own
+ * domain's manage predicate.
+ */
+export async function canDeletePatientRecords(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string
+): Promise<boolean> {
+  return hasAnyRole(supabase, callerUserId, ORG_MANAGEMENT_ROLES);
 }
 
 /**

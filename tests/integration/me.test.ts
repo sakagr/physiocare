@@ -76,17 +76,28 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
     );
   });
 
-  it("limits a receptionist to patients, packages, and invoices", async () => {
+  it("gives a receptionist the front-desk manage tokens but not the catalogue or record-delete ones", async () => {
     const organization = await ctx.createOrganization(`${ctx.runId}-reception-org`);
     const reception = await ctx.createUser(organization.id, "ORG_RECEPTIONIST", "reception");
 
     const me = await getCurrentUser(ctx.admin, reception.id);
 
     expect(me.group).toBe("org");
+    // Reception may manage patients and their package assignments (both
+    // ORG_FRONT_DESK_ROLES) but not the catalogue, and may not delete a
+    // patient record -- the deliberate asymmetry against uploading one.
     expect([...me.capabilities].sort()).toEqual(
-      (["invoices:access", "packages:view", "patients:view"] as Capability[]).sort()
+      ([
+        "invoices:access",
+        "packages:view",
+        "patientPackages:manage",
+        "patients:manage",
+        "patients:view",
+      ] as Capability[]).sort()
     );
     expect(me.capabilities).not.toContain("reports:view");
+    expect(me.capabilities).not.toContain("packages:manage");
+    expect(me.capabilities).not.toContain("patientRecords:delete");
   });
 
   it("grants a super admin the platform API explorer capability and no org capabilities", async () => {

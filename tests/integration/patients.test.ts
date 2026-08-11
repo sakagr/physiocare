@@ -8,6 +8,7 @@ import {
   getPatientDetails,
   listOrganizationPatients,
 } from "@/server/services/patient.service";
+import { createPatientRecord, deletePatientRecord } from "@/server/services/patient-record.service";
 import { countPatients, findPatientById, listPatients } from "@/server/repositories/patient.repository";
 import { validClinicInput, validPatientInput } from "../helpers/factories";
 import { describeIntegration, setupIntegrationContext } from "../helpers/integration-context";
@@ -81,6 +82,51 @@ describeIntegration("Patient lifecycle", () => {
     const filters = { page: 1, limit: 10, search: "jane doe" };
     expect(await listPatients(ctx.admin, organization.id, filters)).toEqual([expect.objectContaining({ id: matching.id })]);
     expect(await countPatients(ctx.admin, organization.id, filters)).toBe(1);
+  });
+
+  it("lets a patient be deleted once its only record has been soft-deleted", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-record-ref-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "record-ref-owner");
+    const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-record-ref`));
+
+    const record = await createPatientRecord(ctx.admin, ctx.admin, owner.id, patient.id, {
+      recordType: "xray",
+      title: "Only record",
+      fileBuffer: Buffer.from("%PDF-1.4 only"),
+      fileName: "only.pdf",
+      mimeType: "application/pdf",
+    });
+
+    await expect(deletePatient(ctx.admin, owner.id, patient.id)).rejects.toMatchObject({
+      code: ErrorCodes.PATIENT_HAS_DEPENDENT_RECORDS,
+    });
+
+    // existsPatientRecordForPatient feeds hasClinicalReferences, so the
+    // deleted_at filter it gains also loosens patient deletion -- otherwise
+    // the block would cite records that no longer exist.
+    await deletePatientRecord(ctx.admin, ctx.admin, owner.id, patient.id, record.id);
+    expect((await deletePatient(ctx.admin, owner.id, patient.id)).deleted_at).not.toBeNull();
+  });
+
+  it("writes audit entries for patient create, update, and delete", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-patient-audit-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "patient-audit-owner");
+    const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-patient-audit`));
+    await updatePatient(ctx.admin, owner.id, patient.id, { fullName: "Renamed Patient" });
+    await deletePatient(ctx.admin, owner.id, patient.id);
+
+    const { data: entries } = await ctx.admin
+      .from("audit_logs")
+      .select("action, entity_name, old_data, new_data")
+      .eq("entity_id", patient.id)
+      .order("created_at", { ascending: true });
+
+    expect((entries ?? []).map((entry) => entry.action)).toEqual(["create", "update", "delete"]);
+    expect(entries?.every((entry) => entry.entity_name === "patients")).toBe(true);
+    expect(entries?.[0].new_data).toMatchObject({ patient_code: patient.patient_code });
+    expect(entries?.[1].old_data).toMatchObject({ full_name: patient.full_name });
+    expect(entries?.[1].new_data).toMatchObject({ full_name: "Renamed Patient" });
+    expect(entries?.[2].old_data).toMatchObject({ full_name: "Renamed Patient" });
   });
 
   it("enforces organization scoping and read access through the service layer", async () => {

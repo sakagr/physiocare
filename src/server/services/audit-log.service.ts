@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import type { AuditLog } from "../repositories/audit-log.repository";
-import { insertAuditLog, listAuditLogs, countAuditLogs } from "../repositories/audit-log.repository";
+import {
+  insertAuditLog,
+  insertAuditLogWithoutReturn,
+  listAuditLogs,
+  countAuditLogs,
+} from "../repositories/audit-log.repository";
 import { findUserById } from "../repositories/user.repository";
 import { canViewAuditLogs } from "./authorization.service";
 import { AppError, ErrorCodes } from "../errors";
@@ -10,8 +15,13 @@ import type { PagedResult } from "../validators/shared.validator";
 /**
  * Records an audit log entry. A cross-cutting helper called explicitly by
  * other orchestration services after a mutation -- not a per-entity CRUD
- * service, and not wired into every mutation this phase (D15: a
- * representative starter set is enough to validate the mechanism).
+ * service. Coverage before F5 was a deliberate starter set (D15: enough to
+ * validate the mechanism); F5 logs every write in its own surface area and
+ * the pre-F5 features are retrofitted in R9.
+ *
+ * This function throws on failure. New call sites should use
+ * recordAuditLogSafe below unless the caller genuinely wants a failed audit
+ * insert to fail the command.
  */
 export async function recordAuditLog(
   supabase: SupabaseClient<Database>,
@@ -34,6 +44,56 @@ export async function recordAuditLog(
     old_data: entry.oldData ?? null,
     new_data: entry.newData ?? null,
   });
+}
+
+/**
+ * Renders an unknown thrown value for the warning below. Supabase rejects with
+ * a plain PostgrestError object, not an Error, so `String(error)` would emit
+ * "[object Object]" and lose the only useful part.
+ */
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return String(error);
+}
+
+/**
+ * Records an audit entry without ever failing the operation it describes.
+ * The mutation has already committed and no transaction spans both writes,
+ * so a failed audit insert must not surface as a failed command.
+ *
+ * The warning deliberately carries identifiers and the error only -- never
+ * oldData/newData, which are full row snapshots and, for patients and
+ * patient records, contain personal and clinical data. Logs are not
+ * access-controlled; audit_logs is (Owner/Admin only).
+ */
+export async function recordAuditLogSafe(
+  supabase: SupabaseClient<Database>,
+  entry: Parameters<typeof recordAuditLog>[1]
+): Promise<void> {
+  try {
+    await insertAuditLogWithoutReturn(supabase, {
+      organization_id: entry.organizationId,
+      user_id: entry.userId,
+      action: entry.action,
+      entity_name: entry.entityName,
+      entity_id: entry.entityId,
+      old_data: entry.oldData ?? null,
+      new_data: entry.newData ?? null,
+    });
+  } catch (error) {
+    // TODO: Introduce centralized monitoring/alerting for audit failures.
+    console.warn("[audit] failed to record entry", {
+      organizationId: entry.organizationId,
+      userId: entry.userId,
+      action: entry.action,
+      entityName: entry.entityName,
+      entityId: entry.entityId,
+      error: describeError(error),
+    });
+  }
 }
 
 /**

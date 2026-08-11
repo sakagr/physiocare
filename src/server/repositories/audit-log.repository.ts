@@ -25,6 +25,27 @@ export async function insertAuditLog(
 }
 
 /**
+ * Inserts an audit log record without reading it back.
+ *
+ * insertAuditLog above returns the inserted row, which requires a select the
+ * caller's own session may not be allowed to perform: audit_logs_insert_policy
+ * admits any org member, but audit_logs_select_policy admits only
+ * ORG_OWNER/ORG_ADMIN. Through a receptionist's session client the insert
+ * commits and the read-back returns no rows, so the caller sees an error for a
+ * write that actually succeeded. Callers with no use for the row use this.
+ */
+export async function insertAuditLogWithoutReturn(
+  supabase: SupabaseClient<Database>,
+  auditLog: InsertAuditLog
+): Promise<void> {
+  const { error } = await supabase.from("audit_logs").insert(auditLog);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
  * Lists audit log records within an organization with pagination filters.
  */
 export async function listAuditLogs(

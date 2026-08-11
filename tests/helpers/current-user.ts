@@ -38,10 +38,14 @@ export function makeCurrentUser(
 
 const OWNER_CAPABILITIES: Capability[] = [
   "patients:view",
+  "patients:manage",
+  "patientRecords:delete",
   "appointments:oversee",
   "attendance:oversee",
   "invoices:access",
   "packages:view",
+  "packages:manage",
+  "patientPackages:manage",
   "reports:view",
   "users:manage",
   "clinics:manage",
@@ -70,9 +74,17 @@ const PHYSIO_CAPABILITIES: Capability[] = [
   "reports:view",
 ];
 
+/**
+ * Reception may manage patients and their package assignments (both
+ * ORG_FRONT_DESK_ROLES) but not the catalogue (ORG_MANAGEMENT_ROLES), and may
+ * not delete a patient record -- the deliberate asymmetry against being able
+ * to upload one.
+ */
 const RECEPTION_CAPABILITIES: Capability[] = [
   "patients:view",
+  "patients:manage",
   "packages:view",
+  "patientPackages:manage",
   "invoices:access",
 ];
 

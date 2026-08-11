@@ -28,6 +28,7 @@ import {
   canCorrectPackageSessionUsage,
   assertOrganizationCanTransact,
 } from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePatientPackageInput, UpdatePatientPackageInput } from "../validators/patient-package.validator";
@@ -88,7 +89,7 @@ export async function createPatientPackage(
   const expiryDate = new Date(purchasedOn);
   expiryDate.setDate(expiryDate.getDate() + pkg.validity_days);
 
-  return insertPatientPackage(supabase, {
+  const assignment = await insertPatientPackage(supabase, {
     organization_id: caller.organization_id,
     patient_id: patient.id,
     package_id: pkg.id,
@@ -100,6 +101,17 @@ export async function createPatientPackage(
     purchased_on: purchasedOn,
     expiry_date: expiryDate.toISOString().slice(0, 10),
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: caller.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "patient_packages",
+    entityId: assignment.id,
+    newData: assignment,
+  });
+
+  return assignment;
 }
 
 /**
@@ -135,11 +147,26 @@ export async function updatePatientPackage(
   }
 
   const isCancelling = input.status === "cancelled";
-  return persistPatientPackageUpdate(supabase, patientPackageId, {
+  const updated = await persistPatientPackageUpdate(supabase, patientPackageId, {
     extended_validity_to: input.extendedValidityTo !== undefined ? input.extendedValidityTo : undefined,
     cancelled_at: isCancelling ? new Date().toISOString() : undefined,
     cancelled_by: isCancelling ? callerUserId : undefined,
   });
+
+  // One function, two intents: the action names the lifecycle transition that
+  // actually happened, so an auditor can tell a cancellation from a validity
+  // extension without diffing snapshots.
+  await recordAuditLogSafe(supabase, {
+    organizationId: patientPackage.organization_id,
+    userId: callerUserId,
+    action: isCancelling ? "cancel" : "extend_validity",
+    entityName: "patient_packages",
+    entityId: patientPackage.id,
+    oldData: patientPackage,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**
@@ -180,7 +207,20 @@ export async function deletePatientPackage(
     );
   }
 
-  return persistPatientPackageUpdate(supabase, patientPackageId, { deleted_at: new Date().toISOString() });
+  const deleted = await persistPatientPackageUpdate(supabase, patientPackageId, {
+    deleted_at: new Date().toISOString(),
+  });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: patientPackage.organization_id,
+    userId: callerUserId,
+    action: "delete",
+    entityName: "patient_packages",
+    entityId: patientPackage.id,
+    oldData: patientPackage,
+  });
+
+  return deleted;
 }
 
 /**

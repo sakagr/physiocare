@@ -15,7 +15,7 @@ import { existsConsultationForPatient } from "../repositories/consultation.repos
 import { existsPrescriptionForPatient } from "../repositories/prescription.repository";
 import { existsPatientRecordForPatient } from "../repositories/patient-record.repository";
 import { canViewPatients, canManagePatients, assertOrganizationCanTransact } from "./authorization.service";
-import { recordAuditLog } from "./audit-log.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePatientInput, UpdatePatientInput } from "../validators/patient.validator";
@@ -90,19 +90,13 @@ export async function createPatient(
     created_by: callerUserId,
   };
 
+  let patient: Patient | null = null;
+
   for (let attempt = 0; attempt < MAX_PATIENT_CODE_ATTEMPTS; attempt++) {
     const patientCode = await generatePatientCode(supabase, caller.organization_id);
     try {
-      const patient = await insertPatient(supabase, { ...payload, patient_code: patientCode });
-      await recordAuditLog(supabase, {
-        organizationId: caller.organization_id,
-        userId: callerUserId,
-        action: "create",
-        entityName: "patients",
-        entityId: patient.id,
-        newData: patient,
-      });
-      return patient;
+      patient = await insertPatient(supabase, { ...payload, patient_code: patientCode });
+      break;
     } catch (error) {
       if (!isUniqueViolation(error) || attempt === MAX_PATIENT_CODE_ATTEMPTS - 1) {
         throw error;
@@ -110,7 +104,23 @@ export async function createPatient(
     }
   }
 
-  throw new Error("Failed to generate a unique patient code");
+  if (!patient) {
+    throw new Error("Failed to generate a unique patient code");
+  }
+
+  // Deliberately outside the retry loop above: its catch treats any unique
+  // violation as a patient-code collision and retries the insert, so a failure
+  // from anything else in that block would create a second patient row.
+  await recordAuditLogSafe(supabase, {
+    organizationId: caller.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "patients",
+    entityId: patient.id,
+    newData: patient,
+  });
+
+  return patient;
 }
 
 /**
@@ -143,7 +153,7 @@ export async function updatePatient(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return persistPatientUpdate(supabase, patientId, {
+  const updated = await persistPatientUpdate(supabase, patientId, {
     full_name: input.fullName,
     gender: input.gender !== undefined ? input.gender || null : undefined,
     dob: input.dob !== undefined ? input.dob || null : undefined,
@@ -152,6 +162,18 @@ export async function updatePatient(
     address: input.address !== undefined ? input.address || null : undefined,
     emergency_contact: input.emergencyContact !== undefined ? input.emergencyContact || null : undefined,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: caller.organization_id,
+    userId: callerUserId,
+    action: "update",
+    entityName: "patients",
+    entityId: patientId,
+    oldData: patient,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**
@@ -191,7 +213,18 @@ export async function deletePatient(
     );
   }
 
-  return persistPatientUpdate(supabase, patientId, { deleted_at: new Date().toISOString() });
+  const deleted = await persistPatientUpdate(supabase, patientId, { deleted_at: new Date().toISOString() });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: caller.organization_id,
+    userId: callerUserId,
+    action: "delete",
+    entityName: "patients",
+    entityId: patientId,
+    oldData: patient,
+  });
+
+  return deleted;
 }
 
 /**

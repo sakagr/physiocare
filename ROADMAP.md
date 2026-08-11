@@ -209,10 +209,12 @@ Organization control surface.
 
 *Prerequisite: Unsubscribed Organization Write Enforcement (backend correctness fix, see `AGENTS.md` → Project Decisions).*
 
-# Phase F5 – Catalog & Packages
+# Phase F5 – Patients & Packages
 
-Packages and assignments.
+Patient records and the package catalog.
 
+- Build Patient Management Module
+- Build Patient Records Upload
 - Build Package Management Module
 - Build Package Activation & Deactivation
 - Build Patient Package Assignment
@@ -224,8 +226,6 @@ Packages and assignments.
 
 Day-to-day clinic.
 
-- Build Patient Management Module
-- Build Patient Records Upload
 - Build Appointment Management Module
 - Build Appointment Status Workflow
 - Build Consultation Module
@@ -290,6 +290,8 @@ Operational readiness.
 - Setup CI/CD
 - Setup Staging Environment
 - Setup Production Environment
+- Retrofit audit logging to pre-F5 features (see `AGENTS.md` → *Audit Logging*; F5 covers its own surface area only)
+- Work the soft-delete exemption list down to its legitimate entries — the ten `PENDING_R9` reads in `tests/unit/soft-delete-liveness.test.ts` each need a judgment: add the filter, or record why the read needs deleted rows
 
 ---
 

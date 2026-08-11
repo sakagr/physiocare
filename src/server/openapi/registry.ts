@@ -796,6 +796,16 @@ const patients: OperationEntry[] = [
     responses: [{ status: 200, description: "Patient record detail, with a signed download URL", schema: patientRecordWithDownloadUrlSchema }],
   },
   {
+    method: "DELETE",
+    path: "/api/patients/{id}/records/{recordId}",
+    tag: "Patients",
+    summary: "Delete a patient record",
+    description: "Soft-deletes the row and removes the Storage object. ORG_OWNER/ORG_ADMIN only; not reversible.",
+    auth: "session",
+    pathParams: [idParam("id", "Patient ID"), idParam("recordId", "Patient record ID")],
+    responses: [{ status: 200, description: "Patient record deleted", schema: patientRecordSchema }],
+  },
+  {
     method: "POST",
     path: "/api/patients/{id}/records",
     tag: "Patients",

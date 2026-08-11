@@ -12,7 +12,7 @@ import {
   activateUser,
 } from "@/server/services/organization.service";
 import { createPatient, updatePatient, deletePatient } from "@/server/services/patient.service";
-import { createPatientRecord } from "@/server/services/patient-record.service";
+import { createPatientRecord, deletePatientRecord } from "@/server/services/patient-record.service";
 import {
   createAppointment,
   updateAppointment,
@@ -59,7 +59,7 @@ import { describeIntegration, setupIntegrationContext } from "../helpers/integra
 
 /**
  * Every write an unsubscribed organization can attempt must be refused
- * (AGENTS.md -> Subscription Principles -> The write/read boundary). At forty
+ * (AGENTS.md -> Subscription Principles -> The write/read boundary). At forty-one
  * call sites, one hand-written assertion per site does not scale, so this is a
  * table.
  *
@@ -81,6 +81,7 @@ describeIntegration("Subscription gate matrix", () => {
     physioId: "",
     clinicId: "",
     patientId: "",
+    patientRecordId: "",
     appointmentId: "",
     spareAppointmentId: "",
     consultationId: "",
@@ -122,6 +123,16 @@ describeIntegration("Subscription gate matrix", () => {
 
     const patient = await createPatient(ctx.admin, fixture.ownerId, validPatientInput(`${ctx.runId}-matrix`));
     fixture.patientId = patient.id;
+
+    fixture.patientRecordId = (
+      await createPatientRecord(ctx.admin, ctx.admin, fixture.ownerId, fixture.patientId, {
+        recordType: "xray",
+        title: "Matrix fixture record",
+        fileBuffer: Buffer.from("%PDF-1.4 matrix fixture"),
+        fileName: "matrix-fixture.pdf",
+        mimeType: "application/pdf",
+      })
+    ).id;
 
     const appointmentInput = () =>
       validAppointmentInput({
@@ -199,6 +210,11 @@ describeIntegration("Subscription gate matrix", () => {
           fileName: "matrix.pdf",
           mimeType: "application/pdf",
         }),
+    },
+    {
+      name: "deletePatientRecord",
+      run: () =>
+        deletePatientRecord(ctx.admin, ctx.admin, fixture.ownerId, fixture.patientId, fixture.patientRecordId),
     },
     {
       name: "createAppointment",
@@ -357,8 +373,8 @@ describeIntegration("Subscription gate matrix", () => {
   it("covers every gated write exactly once", () => {
     const names = GATED_WRITES.map((row) => row.name);
     expect(new Set(names).size).toBe(names.length);
-    // 41 rows, 40 functions: updatePatientPackage carries two rows (cancellation
+    // 42 rows, 41 functions: updatePatientPackage carries two rows (cancellation
     // and validity extension) because the decision names both explicitly.
-    expect(names).toHaveLength(41);
+    expect(names).toHaveLength(42);
   });
 });

@@ -908,6 +908,7 @@ export type Database = {
       patient_records: {
         Row: {
           created_at: string
+          deleted_at: string | null
           file_url: string
           id: string
           notes: string | null
@@ -920,6 +921,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           file_url: string
           id?: string
           notes?: string | null
@@ -932,6 +934,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           file_url?: string
           id?: string
           notes?: string | null

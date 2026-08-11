@@ -12,6 +12,9 @@ import {
   selectSubscriptionPlan,
   activateOrganizationSubscription,
 } from "../../src/server/services/subscription.service";
+import { createPatient } from "../../src/server/services/patient.service";
+import { createPackage } from "../../src/server/services/package.service";
+import { createPatientPackage } from "../../src/server/services/patient-package.service";
 
 loadEnv({ path: path.resolve(__dirname, "../../.env.local"), quiet: true });
 
@@ -34,8 +37,15 @@ export interface SeedData {
     owner: SeededUser;
     admin: SeededUser;
     physio: SeededUser;
+    /** Assigned to no clinic and given no appointment: the F5 Q3 fixture. */
+    receptionist: SeededUser;
     clinicId: string;
     clinicName: string;
+    patientId: string;
+    patientCode: string;
+    packageId: string;
+    packageName: string;
+    assignedPackageId: string;
   };
   saturated: {
     organizationId: string;
@@ -44,6 +54,18 @@ export interface SeedData {
   unsubscribed: {
     organizationId: string;
     owner: SeededUser;
+  };
+  /**
+   * An organization that was subscribed and then lapsed. Kept separate from
+   * `unsubscribed` -- which the F4 settings spec deliberately *subscribes*
+   * mid-run -- so the write-enforcement scenario can never depend on a state
+   * another spec removes. Same reasoning as `saturated`.
+   */
+  lapsed: {
+    organizationId: string;
+    owner: SeededUser;
+    /** Created while the org was still subscribed. */
+    patientId: string;
   };
 }
 
@@ -172,8 +194,31 @@ export default async function globalSetup(): Promise<void> {
   await selectSubscriptionPlan(db as never, superAdmin.id, mainOrgId, "Trial");
   await activateOrganizationSubscription(db as never, superAdmin.id, mainOrgId, "monthly");
 
+  // Deliberately assigned to no clinic: the F5 records-visibility fixture
+  // must prove Reception can see records for a patient with no appointment.
+  const receptionist = await user(mainOrgId, "ORG_RECEPTIONIST", "reception", "E2E Reception");
+
   const clinicName = `${runId} North Clinic`;
   const clinicId = await createClinic(db, mainOrgId, clinicName);
+
+  // Built through the real services so the workspace, the catalogue, and the
+  // assignment tab all have a target that does not depend on another test
+  // having created one first.
+  const mainPatient = await createPatient(db as never, owner.id, {
+    fullName: "E2E Seeded Patient",
+    gender: "female",
+    phone: "9000000001",
+  });
+  const mainPackage = await createPackage(db as never, owner.id, {
+    packageName: `${runId} Seeded Package`,
+    totalSessions: 10,
+    packagePrice: 5000,
+    validityDays: 90,
+  });
+  const mainAssignment = await createPatientPackage(db as never, owner.id, {
+    patientId: mainPatient.id,
+    packageId: mainPackage.id,
+  });
 
   // --- Saturated org: the subscription/limit-enforcement scenario only,
   // kept separate so its exhausted-limit state can never race with the
@@ -199,13 +244,45 @@ export default async function globalSetup(): Promise<void> {
   createdOrganizationIds.push(unsubscribedOrgId);
   const unsubscribedOwner = await user(unsubscribedOrgId, "ORG_OWNER", "unsub-owner", "E2E Unsubscribed Owner");
 
+  // --- Lapsed org: subscribed, populated, then lapsed back, for the F5
+  // write-enforcement spec. It needs a real patient to attempt an edit and a
+  // delete against, and every F5 write is gated -- including the create that
+  // would otherwise make one. ---
+  const lapsedOrgId = await createOrganization(db, `${runId}-lapsed`);
+  createdOrganizationIds.push(lapsedOrgId);
+  const lapsedOwner = await user(lapsedOrgId, "ORG_OWNER", "lapsed-owner", "E2E Lapsed Owner");
+  await selectSubscriptionPlan(db as never, superAdmin.id, lapsedOrgId, "Trial");
+  const lapsedPatient = await createPatient(db as never, lapsedOwner.id, {
+    fullName: "E2E Lapsed Org Patient",
+    phone: "9000000002",
+  });
+  const { error: lapseError } = await db
+    .from("organizations")
+    .update({ subscription_plan_id: await noSubscriptionPlanId(db), subscription_status: "inactive" })
+    .eq("id", lapsedOrgId);
+  if (lapseError) throw lapseError;
+
   const seed: SeedData = {
     runId,
     createdAuthUserIds,
     createdOrganizationIds,
-    main: { organizationId: mainOrgId, owner, admin, physio, clinicId, clinicName },
+    main: {
+      organizationId: mainOrgId,
+      owner,
+      admin,
+      physio,
+      receptionist,
+      clinicId,
+      clinicName,
+      patientId: mainPatient.id,
+      patientCode: mainPatient.patient_code,
+      packageId: mainPackage.id,
+      packageName: mainPackage.package_name,
+      assignedPackageId: mainAssignment.id,
+    },
     saturated: { organizationId: saturatedOrgId, owner: saturatedOwner },
     unsubscribed: { organizationId: unsubscribedOrgId, owner: unsubscribedOwner },
+    lapsed: { organizationId: lapsedOrgId, owner: lapsedOwner, patientId: lapsedPatient.id },
   };
 
   writeFileSync(SEED_FILE, JSON.stringify(seed, null, 2));

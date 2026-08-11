@@ -12,7 +12,7 @@ import {
 import { findUserById } from "../repositories/user.repository";
 import { existsPatientPackagesForPackage } from "../repositories/patient-package.repository";
 import { canViewPackages, canManagePackages, assertOrganizationCanTransact } from "./authorization.service";
-import { recordAuditLog } from "./audit-log.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePackageInput, UpdatePackageInput } from "../validators/package.validator";
@@ -45,13 +45,24 @@ export async function createPackage(
     );
   }
 
-  return insertPackage(supabase, {
+  const created = await insertPackage(supabase, {
     organization_id: caller.organization_id,
     package_name: input.packageName,
     total_sessions: input.totalSessions,
     package_price: input.packagePrice,
     validity_days: input.validityDays,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: caller.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "packages",
+    entityId: created.id,
+    newData: created,
+  });
+
+  return created;
 }
 
 /**
@@ -94,12 +105,24 @@ export async function updatePackage(
     }
   }
 
-  return persistPackageUpdate(supabase, packageId, {
+  const updated = await persistPackageUpdate(supabase, packageId, {
     package_name: input.packageName,
     total_sessions: input.totalSessions,
     package_price: input.packagePrice,
     validity_days: input.validityDays,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: pkg.organization_id,
+    userId: callerUserId,
+    action: "update",
+    entityName: "packages",
+    entityId: pkg.id,
+    oldData: pkg,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**
@@ -131,11 +154,24 @@ export async function activatePackage(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return persistPackageUpdate(supabase, packageId, { is_active: true });
+  const activated = await persistPackageUpdate(supabase, packageId, { is_active: true });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: pkg.organization_id,
+    userId: callerUserId,
+    action: "activate",
+    entityName: "packages",
+    entityId: pkg.id,
+    oldData: pkg,
+    newData: activated,
+  });
+
+  return activated;
 }
 
 /**
- * Toggles a package's status to inactive (is_active: false).
+ * Toggles a package's status to inactive (is_active: false). Blocked if any
+ * patient package still references it, on the same predicate as deletePackage.
  */
 export async function deactivatePackage(
   supabase: SupabaseClient<Database>,
@@ -163,7 +199,33 @@ export async function deactivatePackage(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return persistPackageUpdate(supabase, packageId, { is_active: false });
+  // Same predicate deletePackage uses. It counts *every* assignment row ever
+  // created -- it filters neither deleted_at nor status -- so a package
+  // assigned once, to an assignment since cancelled and soft-deleted, can now
+  // be neither deleted nor deactivated and stays in the catalogue
+  // permanently. That is the accepted cost of matching UX.md Flow 11;
+  // narrowing the predicate to genuinely-active assignments is a separate
+  // change.
+  if (await existsPatientPackagesForPackage(supabase, packageId)) {
+    throw new AppError(
+      "Cannot deactivate a package that has been assigned to a patient",
+      ErrorCodes.PACKAGE_HAS_ACTIVE_ASSIGNMENTS
+    );
+  }
+
+  const deactivated = await persistPackageUpdate(supabase, packageId, { is_active: false });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: pkg.organization_id,
+    userId: callerUserId,
+    action: "deactivate",
+    entityName: "packages",
+    entityId: pkg.id,
+    oldData: pkg,
+    newData: deactivated,
+  });
+
+  return deactivated;
 }
 
 /**
@@ -204,7 +266,7 @@ export async function deletePackage(
 
   const deleted = await persistPackageUpdate(supabase, packageId, { deleted_at: new Date().toISOString() });
 
-  await recordAuditLog(supabase, {
+  await recordAuditLogSafe(supabase, {
     organizationId: pkg.organization_id,
     userId: callerUserId,
     action: "delete",

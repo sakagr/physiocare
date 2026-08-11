@@ -152,4 +152,11 @@ export const api = {
     }),
   delete: <T>(path: string, init?: RequestInit) =>
     apiFetch<T>(path, { ...init, method: "DELETE" }),
+  /**
+   * Multipart POST, for the routes that take a file rather than JSON. No
+   * Content-Type is set: `fetch` derives it from the FormData, and setting it
+   * by hand omits the multipart boundary and makes the body unparseable.
+   */
+  postForm: <T>(path: string, body: FormData, init?: RequestInit) =>
+    apiFetch<T>(path, { ...init, method: "POST", body }),
 };

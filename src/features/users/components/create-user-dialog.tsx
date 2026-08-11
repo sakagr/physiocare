@@ -8,20 +8,10 @@ import { notifications } from "@mantine/notifications";
 import { Modal, Select, TextInput } from "@mantine/core";
 import { FormDialog, RevealOnce } from "@/components/ui";
 import { applyFieldErrors } from "@/lib/api/apply-field-errors";
-import { ApiError } from "@/lib/api/api-error";
-import { LimitEnforcementState, type LimitEnforcementCode } from "@/features/organization";
+import { LimitEnforcementState, LIMIT_ENFORCEMENT_CODES, limitEnforcementCode } from "@/features/organization";
 import { createUser } from "../api";
 import { usersQueryKeys } from "../queries";
 import { createUserFormSchema, type CreateUserFormValues } from "../schemas";
-
-const LIMIT_ENFORCEMENT_CODES: LimitEnforcementCode[] = ["SUBSCRIPTION_REQUIRED", "ORGANIZATION_LIMIT_EXCEEDED"];
-
-function limitEnforcementCode(error: unknown): LimitEnforcementCode | null {
-  if (error instanceof ApiError && error.code && (LIMIT_ENFORCEMENT_CODES as string[]).includes(error.code)) {
-    return error.code as LimitEnforcementCode;
-  }
-  return null;
-}
 
 /**
  * Create user (UX.md → Flow 9 step 1): on success, swaps the dialog's body

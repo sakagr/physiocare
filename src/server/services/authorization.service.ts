@@ -66,6 +66,14 @@ export async function getAssignableRoles(
 const ORG_MANAGEMENT_ROLES: AppRole[] = ["ORG_OWNER", "ORG_ADMIN", "SUPER_ADMIN"];
 
 /**
+ * Roles authorized to record their own attendance: management tier plus the
+ * physiotherapist who is actually present to check in. Receptionist is
+ * deliberately excluded -- they record other staff's attendance but not
+ * their own (AGENTS.md -> Project Decisions, D-A1).
+ */
+const SELF_ATTENDANCE_ROLES: AppRole[] = [...ORG_MANAGEMENT_ROLES, "ORG_PHYSIOTHERAPIST"];
+
+/**
  * Roles authorized to view or set compensation. Narrower than
  * `ORG_MANAGEMENT_ROLES` -- Owner-only (plus the SUPER_ADMIN platform
  * override) on product/privacy grounds: compensation is Owner-scoped
@@ -74,12 +82,7 @@ const ORG_MANAGEMENT_ROLES: AppRole[] = ["ORG_OWNER", "ORG_ADMIN", "SUPER_ADMIN"
 const COMPENSATION_ROLES: AppRole[] = ["ORG_OWNER", "SUPER_ADMIN"];
 
 /** Roles authorized for front-desk-level management gates (org-admin tier plus receptionist). */
-const ORG_FRONT_DESK_ROLES: AppRole[] = [
-  "ORG_OWNER",
-  "ORG_ADMIN",
-  "ORG_RECEPTIONIST",
-  "SUPER_ADMIN",
-];
+const ORG_FRONT_DESK_ROLES: AppRole[] = [...ORG_MANAGEMENT_ROLES, "ORG_RECEPTIONIST"];
 
 /**
  * Resolves the caller's role and checks it against an allowed role set.
@@ -631,15 +634,15 @@ export async function canManageAttendance(
 }
 
 /**
- * Checks if a caller may record their own attendance (any active org member).
+ * Checks if a caller may record their own attendance: management tier or
+ * the physiotherapist themselves. Receptionist is deliberately excluded --
+ * see `SELF_ATTENDANCE_ROLES`.
  */
 export async function canRecordOwnAttendance(
   supabase: SupabaseClient<Database>,
   callerUserId: string
 ): Promise<boolean> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) return false;
-  return !!caller.organization_id;
+  return hasAnyRole(supabase, callerUserId, SELF_ATTENDANCE_ROLES);
 }
 
 /**

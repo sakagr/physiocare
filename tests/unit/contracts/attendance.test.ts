@@ -16,6 +16,8 @@ const attendanceFixture = {
   check_out_time: null,
   status: "present",
   notes: null,
+  unavailable_from: null,
+  unavailable_to: null,
   created_at: "2026-02-01T09:00:00Z",
   updated_at: "2026-02-01T09:00:00Z",
   deleted_at: null,
@@ -24,6 +26,12 @@ const attendanceFixture = {
 describe("attendanceSchema", () => {
   it("parses an attendance row", () => {
     expect(attendanceSchema.parse(attendanceFixture)).toEqual(attendanceFixture);
+  });
+
+  // T-2.2
+  it("parses a row carrying a half-day unavailable window", () => {
+    const halfDayFixture = { ...attendanceFixture, status: "half_day", unavailable_from: "09:00:00", unavailable_to: "13:00:00" };
+    expect(attendanceSchema.parse(halfDayFixture)).toEqual(halfDayFixture);
   });
 });
 

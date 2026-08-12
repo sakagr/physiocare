@@ -13,6 +13,7 @@ import { findPatientById } from "../repositories/patient.repository";
 import { findClinicById } from "../repositories/clinic.repository";
 import { findUserById, findRoleById } from "../repositories/user.repository";
 import { findAssignmentsByUser } from "../repositories/user-clinic.repository";
+import { findAttendanceByUserAndDate } from "../repositories/attendance.repository";
 import {
   canViewAppointments,
   canManageAppointments,
@@ -49,6 +50,53 @@ const LEGAL_APPOINTMENT_STATUS_TRANSITIONS: Record<AppointmentStatus, Appointmen
  */
 export function isLegalAppointmentStatusTransition(from: AppointmentStatus, to: AppointmentStatus): boolean {
   return LEGAL_APPOINTMENT_STATUS_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Blocks booking/rescheduling against a physiotherapist marked
+ * absent/leave/half_day for the appointment's date.
+ *
+ * UTC convention, deliberately not fixed: `attendance_date` is a `date` and
+ * `appointment_time` is `timestamptz`, and no organization timezone column
+ * exists (1100_table_organizations.sql). Both the date and the half_day
+ * window comparison resolve against the appointment's UTC calendar date and
+ * UTC clock time -- the same convention `recordCheckIn` already uses for its
+ * default date. Wrong near midnight or a window edge for a non-UTC
+ * organization; the fix (an organization timezone column) is a schema-wide
+ * concern left outside this feature.
+ *
+ * A validation read, not an orchestration -- this module already reads
+ * patient/clinic/user/user-clinic tables for the same purpose. Deliberately
+ * not clinic-scoped: unavailability is organization-wide, not per clinic --
+ * the partial unique index on (organization_id, user_id, attendance_date)
+ * permits only one live attendance row per person per day, so a
+ * "unavailable at clinic A, available at clinic B" state cannot exist.
+ */
+async function assertPhysiotherapistAvailable(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  physiotherapistId: string,
+  appointmentTime: string
+): Promise<void> {
+  const isoTime = new Date(appointmentTime).toISOString();
+  const date = isoTime.slice(0, 10);
+  const clockTime = isoTime.slice(11, 19);
+
+  const attendance = await findAttendanceByUserAndDate(supabase, organizationId, physiotherapistId, date);
+  if (!attendance) return;
+
+  const isUnavailable =
+    attendance.status === "absent" ||
+    attendance.status === "leave" ||
+    (attendance.status === "half_day" &&
+      attendance.unavailable_from !== null &&
+      attendance.unavailable_to !== null &&
+      clockTime >= attendance.unavailable_from &&
+      clockTime < attendance.unavailable_to);
+
+  if (isUnavailable) {
+    throw new AppError("This physiotherapist isn't available at that time.", ErrorCodes.PHYSIOTHERAPIST_UNAVAILABLE);
+  }
 }
 
 export interface AppointmentListFilters {
@@ -120,6 +168,8 @@ export async function createAppointment(
     throw new AppError("Physiotherapist is not assigned to the target clinic", ErrorCodes.FORBIDDEN);
   }
 
+  await assertPhysiotherapistAvailable(supabase, caller.organization_id, physiotherapist.id, input.appointmentTime);
+
   return insertAppointment(supabase, {
     organization_id: caller.organization_id,
     patient_id: patient.id,
@@ -157,6 +207,20 @@ export async function updateAppointment(
   // never fetches the caller, and canAccessAppointment admits SUPER_ADMIN,
   // which has no organization of its own.
   await assertOrganizationCanTransact(supabase, appointment.organization_id);
+
+  // Re-checked against the destination time only, and only when the time is
+  // actually changing -- an edit to type or notes alone re-checks nothing.
+  // Without this, the create-time block is trivially bypassed: book outside
+  // the window, then reschedule into it (D-J). The physiotherapist is taken
+  // from the existing row; reassigning them is not permitted here.
+  if (input.appointmentTime !== undefined) {
+    await assertPhysiotherapistAvailable(
+      supabase,
+      appointment.organization_id,
+      appointment.physiotherapist_id,
+      input.appointmentTime
+    );
+  }
 
   return persistAppointmentUpdate(supabase, appointmentId, {
     appointment_time: input.appointmentTime,
@@ -205,6 +269,66 @@ export async function updateAppointmentStatus(
     old_status: previousStatus,
     new_status: input.status,
     changed_by: callerUserId,
+  });
+
+  return updated;
+}
+
+/** Statuses an availability auto-cancel may act on. See D-D. */
+const AUTO_CANCEL_ELIGIBLE_STATUSES: AppointmentStatus[] = ["scheduled", "confirmed"];
+
+/**
+ * Cancels an appointment under **system authority**, for the availability
+ * auto-cancel workflow (attendance-workflow.service.ts). Takes only the
+ * admin client -- it is entirely a system act, not authorized by any
+ * caller's own access to the appointment. Cancelling through
+ * `updateAppointmentStatus`'s `canAccessAppointment` check would make the
+ * feature's effect depend on who recorded the absence: a receptionist would
+ * clear only appointments at clinics she is assigned to, both at the
+ * service layer and under `appointments_update_policy` in RLS, leaving a
+ * schedule half-cleared with no patient notification written. This function
+ * (and the listing that feeds it) run on the admin client precisely to
+ * avoid that.
+ *
+ * System authority is about what may be written, not about hiding who
+ * triggered it: the status log still records `changed_by` as the user who
+ * recorded the absence.
+ *
+ * Never routes through `transitionAppointmentStatus` -- no package session
+ * can ever be consumed or reversed by an availability cancel. The eligible-
+ * status check is enforced here independently of the orchestration's own
+ * filter (D-D), so "an availability cancel can never touch a completed
+ * visit" is structural rather than a caller convention.
+ */
+export async function cancelAppointmentAsSystem(
+  adminClient: SupabaseClient<Database>,
+  organizationId: string,
+  appointmentId: string,
+  changedByUserId: string
+): Promise<Appointment> {
+  await assertOrganizationCanTransact(adminClient, organizationId);
+
+  const appointment = await findAppointmentById(adminClient, appointmentId);
+  if (!appointment || appointment.organization_id !== organizationId) {
+    throw new AppError("Appointment not found", ErrorCodes.NOT_FOUND);
+  }
+
+  if (!AUTO_CANCEL_ELIGIBLE_STATUSES.includes(appointment.status)) {
+    throw new AppError(
+      `Cannot auto-cancel an appointment in status ${appointment.status}`,
+      ErrorCodes.INVALID_APPOINTMENT_STATUS_TRANSITION
+    );
+  }
+
+  const previousStatus = appointment.status;
+  const updated = await persistAppointmentUpdate(adminClient, appointmentId, { status: "cancelled" });
+
+  await insertAppointmentStatusLog(adminClient, {
+    organization_id: appointment.organization_id,
+    appointment_id: appointment.id,
+    old_status: previousStatus,
+    new_status: "cancelled",
+    changed_by: changedByUserId,
   });
 
   return updated;

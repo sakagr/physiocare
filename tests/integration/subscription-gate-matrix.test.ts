@@ -18,6 +18,7 @@ import {
   updateAppointment,
   updateAppointmentStatus,
   deleteAppointment,
+  cancelAppointmentAsSystem,
 } from "@/server/services/appointment.service";
 import { createConsultation, updateConsultation } from "@/server/services/consultation.service";
 import { createPrescription, updatePrescription } from "@/server/services/prescription.service";
@@ -38,7 +39,7 @@ import {
 } from "@/server/services/patient-package.service";
 import { createInvoice, updateInvoice, deleteInvoice } from "@/server/services/invoice.service";
 import { createPayment, updatePaymentStatus } from "@/server/services/payment.service";
-import { recordCheckIn, recordCheckOut, updateAttendance } from "@/server/services/attendance.service";
+import { recordCheckIn, recordCheckOut, updateAttendanceRecord } from "@/server/services/attendance.service";
 import { setUserCompensation } from "@/server/services/commission.service";
 import { selectSubscriptionPlan } from "@/server/services/subscription.service";
 import {
@@ -256,6 +257,10 @@ describeIntegration("Subscription gate matrix", () => {
 
     // --- Cancellations and reversals ---
     { name: "deleteAppointment", run: () => deleteAppointment(ctx.admin, fixture.ownerId, fixture.appointmentId) },
+    {
+      name: "cancelAppointmentAsSystem",
+      run: () => cancelAppointmentAsSystem(ctx.admin, fixture.organizationId, fixture.appointmentId, fixture.ownerId),
+    },
     { name: "deleteInvoice", run: () => deleteInvoice(ctx.admin, fixture.ownerId, fixture.invoiceId) },
     {
       name: "deletePatientPackage",
@@ -313,8 +318,11 @@ describeIntegration("Subscription gate matrix", () => {
     },
     { name: "recordCheckOut", run: () => recordCheckOut(ctx.admin, fixture.ownerId, fixture.attendanceId) },
     {
-      name: "updateAttendance",
-      run: () => updateAttendance(ctx.admin, fixture.ownerId, fixture.attendanceId, { status: "absent" }),
+      // Renamed from "updateAttendance" -- a rename, not a new commitment;
+      // the gate stays on the same domain function, only its name changed
+      // (D-L). Repointed at updateAttendanceRecord accordingly.
+      name: "updateAttendanceRecord",
+      run: () => updateAttendanceRecord(ctx.admin, fixture.ownerId, fixture.attendanceId, { status: "absent" }),
     },
 
     // --- Editing existing records ---
@@ -373,8 +381,8 @@ describeIntegration("Subscription gate matrix", () => {
   it("covers every gated write exactly once", () => {
     const names = GATED_WRITES.map((row) => row.name);
     expect(new Set(names).size).toBe(names.length);
-    // 42 rows, 41 functions: updatePatientPackage carries two rows (cancellation
+    // 43 rows, 42 functions: updatePatientPackage carries two rows (cancellation
     // and validity extension) because the decision names both explicitly.
-    expect(names).toHaveLength(42);
+    expect(names).toHaveLength(43);
   });
 });

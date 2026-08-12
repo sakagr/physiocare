@@ -96,6 +96,8 @@ export async function recordCheckIn(
       check_in_time: checkInTime,
       status: input.status,
       notes: input.notes || null,
+      unavailable_from: input.status === "half_day" ? input.unavailableFrom : null,
+      unavailable_to: input.status === "half_day" ? input.unavailableTo : null,
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
@@ -148,9 +150,12 @@ export async function recordCheckOut(
 }
 
 /**
- * Applies an administrative correction to an attendance record's status/notes.
+ * Applies an administrative correction to an attendance record's
+ * status/notes/window. Called only from attendance-workflow.service.ts's
+ * `updateAttendance`, which is the sole public entry point for an attendance
+ * update -- see AGENTS.md -> Service boundaries (D-L).
  */
-export async function updateAttendance(
+export async function updateAttendanceRecord(
   supabase: SupabaseClient<Database>,
   callerUserId: string,
   attendanceId: string,
@@ -179,11 +184,18 @@ export async function updateAttendance(
 
   const nextStatus = input.status ?? attendance.status;
   const checkInTime = CHECK_IN_REQUIRED_STATUSES.includes(nextStatus) ? attendance.check_in_time : null;
+  // Nulled whenever the corrected status is not half_day, mirroring the
+  // check_in_time clearing above -- a correction away from half_day cannot
+  // leave an orphaned window the CHECK constraint would reject.
+  const nextUnavailableFrom = nextStatus === "half_day" ? (input.unavailableFrom ?? attendance.unavailable_from) : null;
+  const nextUnavailableTo = nextStatus === "half_day" ? (input.unavailableTo ?? attendance.unavailable_to) : null;
 
   return persistAttendanceUpdate(supabase, attendanceId, {
     status: input.status,
     notes: input.notes !== undefined ? input.notes || null : undefined,
     check_in_time: checkInTime,
+    unavailable_from: nextUnavailableFrom,
+    unavailable_to: nextUnavailableTo,
   });
 }
 

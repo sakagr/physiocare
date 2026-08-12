@@ -239,6 +239,47 @@ describe("attendance validator", () => {
     expect(() => validateCreateAttendanceInput({ clinicId: uuid, status: "bogus" })).toThrow();
     expect(validateUpdateAttendanceInput({ status: "absent" })).toEqual({ status: "absent" });
   });
+
+  // T-2.1
+  it("requires an unavailable window exactly when status is half_day, on create", () => {
+    expect(() =>
+      validateCreateAttendanceInput({ clinicId: uuid, status: "half_day" })
+    ).toThrow();
+    expect(() =>
+      validateCreateAttendanceInput({ clinicId: uuid, status: "present", unavailableFrom: "09:00", unavailableTo: "13:00" })
+    ).toThrow();
+    expect(
+      validateCreateAttendanceInput({ clinicId: uuid, status: "half_day", unavailableFrom: "09:00", unavailableTo: "13:00" })
+    ).toMatchObject({ status: "half_day", unavailableFrom: "09:00", unavailableTo: "13:00" });
+  });
+
+  it("rejects an unavailable window with from >= to, or supplied only on one side", () => {
+    expect(() =>
+      validateCreateAttendanceInput({ clinicId: uuid, status: "half_day", unavailableFrom: "13:00", unavailableTo: "09:00" })
+    ).toThrow();
+    expect(() =>
+      validateCreateAttendanceInput({ clinicId: uuid, status: "half_day", unavailableFrom: "13:00", unavailableTo: "13:00" })
+    ).toThrow();
+    expect(() =>
+      validateCreateAttendanceInput({ clinicId: uuid, status: "half_day", unavailableFrom: "09:00" })
+    ).toThrow();
+  });
+
+  it("applies the same window rules on update, but only when status is explicitly set", () => {
+    expect(() => validateUpdateAttendanceInput({ status: "half_day" })).toThrow();
+    expect(() =>
+      validateUpdateAttendanceInput({ status: "present", unavailableFrom: "09:00", unavailableTo: "13:00" })
+    ).toThrow();
+    expect(
+      validateUpdateAttendanceInput({ status: "half_day", unavailableFrom: "09:00", unavailableTo: "13:00" })
+    ).toEqual({ status: "half_day", unavailableFrom: "09:00", unavailableTo: "13:00" });
+    // Correcting the window alone, without touching status, is allowed at the
+    // validator level -- the service layer resolves it against the existing
+    // record's status.
+    expect(
+      validateUpdateAttendanceInput({ unavailableFrom: "10:00", unavailableTo: "12:00" })
+    ).toEqual({ unavailableFrom: "10:00", unavailableTo: "12:00" });
+  });
 });
 
 describe("notification validator", () => {

@@ -24,6 +24,29 @@ export async function insertNotification(
 }
 
 /**
+ * Inserts a notification record without reading it back.
+ *
+ * insertNotification above returns the inserted row, which requires a select
+ * the caller's own session may not be allowed to perform: notifications_insert_policy
+ * admits any org member, but notifications_select_policy admits only the
+ * recipient themselves, ORG_ADMIN, or SUPER_ADMIN. Through a physiotherapist's
+ * or receptionist's session client the insert commits and the read-back
+ * returns no rows, so the caller sees an error for a write that actually
+ * succeeded -- the same shape insertAuditLogWithoutReturn exists for. Callers
+ * with no use for the row use this.
+ */
+export async function insertNotificationWithoutReturn(
+  supabase: SupabaseClient<Database>,
+  notification: InsertNotification
+): Promise<void> {
+  const { error } = await supabase.from("notifications").insert(notification);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
  * Finds an active (non-deleted) notification by ID.
  */
 export async function findNotificationById(

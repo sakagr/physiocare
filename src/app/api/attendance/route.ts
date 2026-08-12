@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { validateCreateAttendanceInput, attendanceListQuerySchema } from "@/server/validators/attendance.validator";
-import { recordCheckIn, listOrganizationAttendance } from "@/server/services/attendance.service";
+import { listOrganizationAttendance } from "@/server/services/attendance.service";
+import { recordAttendance } from "@/server/services/attendance-workflow.service";
 import { createRouteHandler } from "@/lib/api/route-handler";
 
 export const POST = createRouteHandler(async (request, { supabase, user }) => {
   const body = await request.json();
   const validatedInput = validateCreateAttendanceInput(body);
-  const result = await recordCheckIn(supabase, user.id, validatedInput);
+  const adminClient = createAdminClient();
+  const result = await recordAttendance(supabase, adminClient, user.id, validatedInput);
   return NextResponse.json(result, { status: 201 });
 });
 

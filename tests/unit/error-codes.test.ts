@@ -23,6 +23,19 @@ describe("error-code behavior map", () => {
     expect(behavior.behavior).toBe("forbidden");
   });
 
+  // T-3.2
+  it("routes PHYSIOTHERAPIST_UNAVAILABLE to a blocking toast with its configured copy (D-C)", () => {
+    // A generic message distinct from the configured copy: this only passes
+    // if resolveErrorBehavior actually looks the code up in ERROR_BEHAVIORS
+    // rather than falling through to the toast-shaped generic fallback.
+    const behavior = resolveErrorBehavior(
+      new ApiError("unavailable", 409, ErrorCodes.PHYSIOTHERAPIST_UNAVAILABLE)
+    );
+    expect(behavior).toEqual(ERROR_BEHAVIORS[ErrorCodes.PHYSIOTHERAPIST_UNAVAILABLE]);
+    expect(behavior.behavior).toBe("toast");
+    expect(behavior.message).not.toBe("unavailable");
+  });
+
   it("routes an expired session to a login redirect", () => {
     const behavior = resolveErrorBehavior(
       new ApiError("Unauthorized", 401, TransportErrorCodes.UNAUTHENTICATED)

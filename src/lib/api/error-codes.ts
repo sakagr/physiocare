@@ -89,6 +89,10 @@ export const ERROR_BEHAVIORS: Record<ErrorCode, ErrorBehaviorEntry> = {
     behavior: "toast",
     message: "A check-in is required before this can be done.",
   },
+  PHYSIOTHERAPIST_UNAVAILABLE: {
+    behavior: "toast",
+    message: "This physiotherapist isn't available at that time.",
+  },
   REPORT_ROW_LIMIT_EXCEEDED: {
     behavior: "toast",
     message: "This report is too large — narrow the filters and try again.",

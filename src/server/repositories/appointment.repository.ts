@@ -182,6 +182,41 @@ export async function listAppointmentsForReport(
 }
 
 /**
+ * Lists every active appointment for a physiotherapist within a time range,
+ * for the availability auto-cancel workflow. Unpaginated -- callers are
+ * expected to have already bounded the date. Deliberately **not**
+ * clinic-scoped: unavailability is organization-wide, not per clinic (D-N)
+ * -- the partial unique index on (organization_id, user_id, attendance_date)
+ * permits only one live attendance row per person per day, so a physiotherapist
+ * marked absent at one clinic is absent everywhere they work that day.
+ * `listAppointmentsForReport` is deliberately not reused here: its own doc
+ * comment scopes it to reporting, and widening that contract to serve a
+ * write path would make a future reporting change silently a scheduling one.
+ */
+export async function listActiveAppointmentsForPhysiotherapistInRange(
+  supabase: SupabaseClient<Database>,
+  organizationId: string,
+  physiotherapistId: string,
+  fromIso: string,
+  toIso: string
+): Promise<Appointment[]> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .eq("physiotherapist_id", physiotherapistId)
+    .is("deleted_at", null)
+    .gte("appointment_time", fromIso)
+    .lte("appointment_time", toIso)
+    .order("appointment_time", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Counts active appointments matching filter criteria within an organization.
  */
 export async function countAppointments(

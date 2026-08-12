@@ -104,7 +104,7 @@ import {
 import { packageListResponseSchema, packageSchema } from "@/contracts/package.contract";
 import { appointmentListResponseSchema, appointmentSchema } from "@/contracts/appointment.contract";
 import { consultationListResponseSchema, consultationSchema } from "@/contracts/consultation.contract";
-import { attendanceListResponseSchema, attendanceSchema } from "@/contracts/attendance.contract";
+import { attendanceListResponseSchema, attendanceSchema, recordAttendanceResultSchema } from "@/contracts/attendance.contract";
 import { prescriptionListResponseSchema, prescriptionSchema } from "@/contracts/prescription.contract";
 import { invoiceListResponseSchema, invoiceWithItemsSchema, invoiceSchema } from "@/contracts/invoice.contract";
 import { invoicePaymentsResponseSchema, paymentSchema } from "@/contracts/payment.contract";
@@ -243,7 +243,7 @@ const attendance: OperationEntry[] = [
     auth: "session",
     pathParams: [idParam("id", "Attendance record ID")],
     requestBody: { contentType: "application/json", schema: updateAttendanceSchema },
-    responses: [{ status: 200, description: "Attendance record updated", schema: attendanceSchema }],
+    responses: [{ status: 200, description: "Attendance record updated, with its availability effect", schema: recordAttendanceResultSchema }],
   },
   {
     method: "POST",
@@ -252,7 +252,7 @@ const attendance: OperationEntry[] = [
     summary: "Record a check-in",
     auth: "session",
     requestBody: { contentType: "application/json", schema: createAttendanceSchema },
-    responses: [{ status: 201, description: "Attendance record created", schema: attendanceSchema }],
+    responses: [{ status: 201, description: "Attendance record created, with its availability effect", schema: recordAttendanceResultSchema }],
   },
   {
     method: "GET",

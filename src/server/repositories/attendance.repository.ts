@@ -67,15 +67,19 @@ export async function findAttendanceById(
 
 /**
  * Finds the active attendance record for a user on a given date, if any.
+ * Organization-scoped and queried on the unique index's leading column,
+ * matching `listAttendance`/`countAttendance`.
  */
 export async function findAttendanceByUserAndDate(
   supabase: SupabaseClient<Database>,
+  organizationId: string,
   userId: string,
   attendanceDate: string
 ): Promise<Attendance | null> {
   const { data, error } = await supabase
     .from("user_attendance")
     .select("*")
+    .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .eq("attendance_date", attendanceDate)
     .is("deleted_at", null)

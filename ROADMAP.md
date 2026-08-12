@@ -209,7 +209,7 @@ Organization control surface.
 
 *Prerequisite: Unsubscribed Organization Write Enforcement (backend correctness fix, see `AGENTS.md` → Project Decisions).*
 
-# Phase F5 – Patients & Packages
+# Phase F5 – Patients & Packages ✅
 
 Patient records and the package catalog.
 
@@ -221,6 +221,8 @@ Patient records and the package catalog.
 - Build Package Session Usage View
 
 ---
+
+*Prerequisite: Physiotherapist Availability (backend feature, see `AGENTS.md` → Project Decisions).*
 
 # Phase F6 – Clinical Operations
 

@@ -1696,6 +1696,26 @@
                         }
                       ]
                     },
+                    "unavailable_from": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unavailable_to": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -1723,6 +1743,8 @@
                     "check_out_time",
                     "status",
                     "notes",
+                    "unavailable_from",
+                    "unavailable_to",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -1864,6 +1886,26 @@
                         }
                       ]
                     },
+                    "unavailable_from": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "unavailable_to": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -1891,6 +1933,8 @@
                     "check_out_time",
                     "status",
                     "notes",
+                    "unavailable_from",
+                    "unavailable_to",
                     "created_at",
                     "updated_at",
                     "deleted_at"
@@ -1994,104 +2038,171 @@
                         "const": ""
                       }
                     ]
+                  },
+                  "unavailableFrom": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
+                  },
+                  "unavailableTo": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
                   }
-                }
+                },
+                "description": "Setting status to half_day requires unavailableFrom/unavailableTo; setting any other status must omit them."
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Attendance record updated",
+            "description": "Attendance record updated, with its availability effect",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "organization_id": {
-                      "type": "string"
-                    },
-                    "user_id": {
-                      "type": "string"
-                    },
-                    "clinic_id": {
-                      "type": "string"
-                    },
-                    "attendance_date": {
-                      "type": "string"
-                    },
-                    "check_in_time": {
-                      "anyOf": [
-                        {
+                    "attendance": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "check_out_time": {
-                      "anyOf": [
-                        {
+                        "organization_id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "present",
-                        "absent",
-                        "half_day",
-                        "leave"
-                      ]
-                    },
-                    "notes": {
-                      "anyOf": [
-                        {
+                        "user_id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "updated_at": {
-                      "type": "string"
-                    },
-                    "deleted_at": {
-                      "anyOf": [
-                        {
+                        "clinic_id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
+                        "attendance_date": {
+                          "type": "string"
+                        },
+                        "check_in_time": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "check_out_time": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "present",
+                            "absent",
+                            "half_day",
+                            "leave"
+                          ]
+                        },
+                        "notes": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "unavailable_from": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "unavailable_to": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
+                      },
+                      "required": [
+                        "id",
+                        "organization_id",
+                        "user_id",
+                        "clinic_id",
+                        "attendance_date",
+                        "check_in_time",
+                        "check_out_time",
+                        "status",
+                        "notes",
+                        "unavailable_from",
+                        "unavailable_to",
+                        "created_at",
+                        "updated_at",
+                        "deleted_at"
                       ]
+                    },
+                    "cancelledAppointmentIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "skippedCheckedInAppointmentIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "failedCancellationIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "failedNotificationAppointmentIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
-                    "id",
-                    "organization_id",
-                    "user_id",
-                    "clinic_id",
-                    "attendance_date",
-                    "check_in_time",
-                    "check_out_time",
-                    "status",
-                    "notes",
-                    "created_at",
-                    "updated_at",
-                    "deleted_at"
+                    "attendance",
+                    "cancelledAppointmentIds",
+                    "skippedCheckedInAppointmentIds",
+                    "failedCancellationIds",
+                    "failedNotificationAppointmentIds"
                   ]
                 }
               }
@@ -2208,107 +2319,174 @@
                         "const": ""
                       }
                     ]
+                  },
+                  "unavailableFrom": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
+                  },
+                  "unavailableTo": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
                   }
                 },
                 "required": [
                   "clinicId"
-                ]
+                ],
+                "description": "half_day status requires unavailableFrom and unavailableTo (unavailableFrom before unavailableTo); every other status must omit them."
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Attendance record created",
+            "description": "Attendance record created, with its availability effect",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "organization_id": {
-                      "type": "string"
-                    },
-                    "user_id": {
-                      "type": "string"
-                    },
-                    "clinic_id": {
-                      "type": "string"
-                    },
-                    "attendance_date": {
-                      "type": "string"
-                    },
-                    "check_in_time": {
-                      "anyOf": [
-                        {
+                    "attendance": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "check_out_time": {
-                      "anyOf": [
-                        {
+                        "organization_id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "present",
-                        "absent",
-                        "half_day",
-                        "leave"
-                      ]
-                    },
-                    "notes": {
-                      "anyOf": [
-                        {
+                        "user_id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "created_at": {
-                      "type": "string"
-                    },
-                    "updated_at": {
-                      "type": "string"
-                    },
-                    "deleted_at": {
-                      "anyOf": [
-                        {
+                        "clinic_id": {
                           "type": "string"
                         },
-                        {
-                          "type": "null"
+                        "attendance_date": {
+                          "type": "string"
+                        },
+                        "check_in_time": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "check_out_time": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "present",
+                            "absent",
+                            "half_day",
+                            "leave"
+                          ]
+                        },
+                        "notes": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "unavailable_from": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "unavailable_to": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
+                      },
+                      "required": [
+                        "id",
+                        "organization_id",
+                        "user_id",
+                        "clinic_id",
+                        "attendance_date",
+                        "check_in_time",
+                        "check_out_time",
+                        "status",
+                        "notes",
+                        "unavailable_from",
+                        "unavailable_to",
+                        "created_at",
+                        "updated_at",
+                        "deleted_at"
                       ]
+                    },
+                    "cancelledAppointmentIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "skippedCheckedInAppointmentIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "failedCancellationIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "failedNotificationAppointmentIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
-                    "id",
-                    "organization_id",
-                    "user_id",
-                    "clinic_id",
-                    "attendance_date",
-                    "check_in_time",
-                    "check_out_time",
-                    "status",
-                    "notes",
-                    "created_at",
-                    "updated_at",
-                    "deleted_at"
+                    "attendance",
+                    "cancelledAppointmentIds",
+                    "skippedCheckedInAppointmentIds",
+                    "failedCancellationIds",
+                    "failedNotificationAppointmentIds"
                   ]
                 }
               }
@@ -2513,6 +2691,26 @@
                               }
                             ]
                           },
+                          "unavailable_from": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unavailable_to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "created_at": {
                             "type": "string"
                           },
@@ -2540,6 +2738,8 @@
                           "check_out_time",
                           "status",
                           "notes",
+                          "unavailable_from",
+                          "unavailable_to",
                           "created_at",
                           "updated_at",
                           "deleted_at"

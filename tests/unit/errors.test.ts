@@ -16,6 +16,11 @@ describe("ERROR_CODE_STATUS", () => {
     expect(ERROR_CODE_STATUS[ErrorCodes.NOT_FOUND]).toBe(404);
   });
 
+  // T-3.1
+  it("maps PHYSIOTHERAPIST_UNAVAILABLE to 409", () => {
+    expect(ERROR_CODE_STATUS[ErrorCodes.PHYSIOTHERAPIST_UNAVAILABLE]).toBe(409);
+  });
+
   it("maps every conflict-style code to 409", () => {
     const conflictCodes = [
       ErrorCodes.ORGANIZATION_NAME_ALREADY_EXISTS,

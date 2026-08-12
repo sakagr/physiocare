@@ -1242,6 +1242,8 @@ export type Database = {
           notes: string | null
           organization_id: string
           status: Database["public"]["Enums"]["attendance_status"]
+          unavailable_from: string | null
+          unavailable_to: string | null
           updated_at: string
           user_id: string
         }
@@ -1256,6 +1258,8 @@ export type Database = {
           notes?: string | null
           organization_id: string
           status?: Database["public"]["Enums"]["attendance_status"]
+          unavailable_from?: string | null
+          unavailable_to?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1270,6 +1274,8 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           status?: Database["public"]["Enums"]["attendance_status"]
+          unavailable_from?: string | null
+          unavailable_to?: string | null
           updated_at?: string
           user_id?: string
         }

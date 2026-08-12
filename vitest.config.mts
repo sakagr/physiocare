@@ -13,6 +13,11 @@ export default defineConfig({
     ],
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     setupFiles: ["tests/setup/testing.ts"],
+    // Vitest defaults to one worker per core, which on an 8-core/8GB M1
+    // competes with `next dev` and the editor's TS server for memory.
+    // Capped at 2; the wall-clock cost is small at this suite size.
+    pool: "threads",
+    poolOptions: { threads: { minThreads: 1, maxThreads: 2 } },
     clearMocks: true,
     restoreMocks: true,
     coverage: {

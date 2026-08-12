@@ -1,0 +1,49 @@
+{
+  // Workspace-local editor tuning for an 8GB M1. Nothing here changes build
+  // or test behaviour -- it only bounds what VS Code holds in memory and
+  // what it watches on disk.
+
+  // The TS server defaults to a 3GB ceiling and will grow into it. This
+  // project's program is ~456 files with skipLibCheck on, which fits well
+  // inside 1.5GB; the cap stops it ballooning.
+  "typescript.tsserver.maxTsServerMemory": 1536,
+
+  // Use the workspace TypeScript rather than the copy bundled with VS Code,
+  // so there is a single tsserver rather than two versions in play.
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  // No DefinitelyTyped packages are consumed beyond what package.json
+  // declares, so the background @types acquisition process is dead weight.
+  "typescript.disableAutomaticTypeAcquisition": true,
+
+  // File watchers are the main non-tsserver cost: node_modules alone is
+  // ~940MB across ~523 packages. None of these paths are hand-edited.
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.next/**": true,
+    "**/.git/objects/**": true,
+    "**/coverage/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true,
+    "**/blob-report/**": true
+  },
+
+  // Keep generated output out of search indexing and quick-open.
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/coverage": true,
+    "**/test-results": true,
+    "**/playwright-report": true,
+    "**/package-lock.json": true,
+    "**/tsconfig.tsbuildinfo": true
+  },
+
+  // Auto-fetch spawns a git process on a timer; the remote is not moving
+  // under you on a solo project.
+  "git.autofetch": false,
+
+  // Cheap wins: no background update checks, no telemetry pipeline.
+  "extensions.autoCheckUpdates": false,
+  "telemetry.telemetryLevel": "off"
+}

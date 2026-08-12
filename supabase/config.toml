@@ -86,7 +86,11 @@ enabled = false
 # max_header_length = 4096
 
 [studio]
-enabled = true
+# Disabled to cut local memory use: Studio is a full Next.js app plus a
+# pg-meta sidecar (~400-600MB) and nothing in the repo depends on it.
+# Query the local DB via `psql` or the Supabase MCP server instead. Flip
+# back to `true` if you want the UI for a session.
+enabled = false
 # Port to use for Supabase Studio.
 port = 54323
 # External URL of the API server that frontend connects to.
@@ -97,9 +101,12 @@ openai_api_key = "env(OPENAI_API_KEY)"
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
 [inbucket]
-# Enabled so the invitation and password-recovery emails the F1 auth flows
-# send can be opened locally at http://127.0.0.1:54324.
-enabled = true
+# Disabled by default to cut local memory use. No test or source code reads
+# it -- the F1 invitation and password-recovery flows are asserted through
+# the Admin API, not the mailbox. Flip back to `true` (then `supabase stop
+# && supabase start`) when you want to eyeball a rendered email at
+# http://127.0.0.1:54324.
+enabled = false
 # Port to use for the email testing server web interface.
 port = 54324
 # Uncomment to expose additional ports for testing user applications that send emails.

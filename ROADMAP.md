@@ -224,7 +224,7 @@ Patient records and the package catalog.
 
 *Prerequisite: Physiotherapist Availability (backend feature, see `AGENTS.md` → Project Decisions).*
 
-# Phase F6 – Clinical Operations
+# Phase F6 – Clinical Operations ✅
 
 Day-to-day clinic.
 
@@ -265,6 +265,7 @@ Visibility surfaces.
 
 - Build Notification Center
 - Build Audit Log Viewer
+- Decide and fix `notifications_select_policy`, which admits `ORG_ADMIN` but not `ORG_OWNER` while `notification.service.ts` treats Owner as a manager. Surfaced by the Physiotherapist Availability phase (which works around it via `insertNotificationWithoutReturn`) and deliberately left to this phase: fixing it means deciding *who may read a patient notification row*, which belongs with the surface that reads them — F6 builds no notification surface, so a policy widened there would ship with nothing exercising it through a real session.
 
 ---
 
@@ -292,7 +293,10 @@ Operational readiness.
 - Setup CI/CD
 - Setup Staging Environment
 - Setup Production Environment
-- Retrofit audit logging to pre-F5 features (see `AGENTS.md` → *Audit Logging*; F5 covers its own surface area only)
+- Retrofit audit logging to the features still uncovered (see `AGENTS.md` → *Audit Logging*). F5 and F6 each covered their own surface area, so what remains is:
+  - **Add coverage where none exists** — `user.service.ts`, `clinic.service.ts`, `user-clinic.service.ts`, `notification.service.ts`.
+  - **Migrate the throwing call sites** in `invoice.service.ts`, `payment.service.ts`, `organization.service.ts` and `subscription.service.ts` from `recordAuditLog` onto `recordAuditLogSafe`, so a failed audit can no longer fail the operation it records.
+  - *No longer owed:* appointments (create/update/every status transition/delete/auto-cancel), consultations, prescriptions, and attendance (record/correct/check-out) — covered by F6 and the availability phase.
 - Work the soft-delete exemption list down to its legitimate entries — the ten `PENDING_R9` reads in `tests/unit/soft-delete-liveness.test.ts` each need a judgment: add the filter, or record why the read needs deleted rows
 
 ---

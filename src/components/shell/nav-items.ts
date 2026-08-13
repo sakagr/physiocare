@@ -70,13 +70,26 @@ export const NAV_ITEMS: NavItem[] = [
     group: "clinical",
     capability: "patients:view",
   },
+  // Appointments and Attendance carry no capability (F6, D11): every org role
+  // reaches both, and the service layer scopes what each one contains --
+  // Owner/Admin organization-wide, a physiotherapist to their own, a
+  // receptionist to their accessible clinics. The org-wide framing *inside*
+  // each destination (the physiotherapist filter, the cross-staff columns and
+  // user/clinic filters) stays gated on `appointments:oversee` /
+  // `attendance:oversee`, which is what those two tokens now mean.
+  //
+  // Neither is ungated for convenience. `canViewAppointments` is "any active
+  // org member", so a token for it would be granted to every org user and
+  // gate nothing. Attendance is reached through three different capabilities
+  // -- `attendance:record` (the physiotherapist marking themselves),
+  // `attendance:manage` (reception recording for staff), either one for
+  // management -- which a single `capability` field cannot express.
   {
     id: "appointments",
     label: "Appointments",
     href: "/app/appointments",
     icon: IconCalendarEvent,
     group: "clinical",
-    capability: "appointments:oversee",
   },
   {
     id: "attendance",
@@ -84,7 +97,6 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/app/attendance",
     icon: IconClipboardList,
     group: "clinical",
-    capability: "attendance:oversee",
   },
   {
     id: "invoices",

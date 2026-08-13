@@ -102,7 +102,11 @@ import {
   packageSessionUsageListResponseSchema,
 } from "@/contracts/patient-package.contract";
 import { packageListResponseSchema, packageSchema } from "@/contracts/package.contract";
-import { appointmentListResponseSchema, appointmentSchema } from "@/contracts/appointment.contract";
+import {
+  appointmentListResponseSchema,
+  appointmentReadSchema,
+  appointmentSchema,
+} from "@/contracts/appointment.contract";
 import { consultationListResponseSchema, consultationSchema } from "@/contracts/consultation.contract";
 import { attendanceListResponseSchema, attendanceSchema, recordAttendanceResultSchema } from "@/contracts/attendance.contract";
 import { prescriptionListResponseSchema, prescriptionSchema } from "@/contracts/prescription.contract";
@@ -137,6 +141,21 @@ const SESSION_WARNING =
 // ---------------------------------------------------------------------------
 const appointments: OperationEntry[] = [
   {
+    method: "GET",
+    path: "/api/appointments/{id}/consultation",
+    tag: "Appointments",
+    summary: "Get the consultation for an appointment, or null if not recorded yet",
+    auth: "session",
+    pathParams: [idParam("id", "Appointment ID")],
+    responses: [
+      {
+        status: 200,
+        description: "The appointment's consultation, or null when the visit has not been recorded",
+        schema: consultationSchema.nullable(),
+      },
+    ],
+  },
+  {
     method: "POST",
     path: "/api/appointments/{id}/consultation",
     tag: "Appointments",
@@ -162,7 +181,7 @@ const appointments: OperationEntry[] = [
     summary: "Get appointment details",
     auth: "session",
     pathParams: [idParam("id", "Appointment ID")],
-    responses: [{ status: 200, description: "Appointment detail", schema: appointmentSchema }],
+    responses: [{ status: 200, description: "Appointment detail", schema: appointmentReadSchema }],
   },
   {
     method: "PATCH",

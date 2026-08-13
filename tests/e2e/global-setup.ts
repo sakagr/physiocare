@@ -15,6 +15,8 @@ import {
 import { createPatient } from "../../src/server/services/patient.service";
 import { createPackage } from "../../src/server/services/package.service";
 import { createPatientPackage } from "../../src/server/services/patient-package.service";
+import { assignUserToClinic } from "../../src/server/services/organization.service";
+import { createAppointment } from "../../src/server/services/appointment.service";
 
 loadEnv({ path: path.resolve(__dirname, "../../.env.local"), quiet: true });
 
@@ -54,6 +56,29 @@ export interface SeedData {
   unsubscribed: {
     organizationId: string;
     owner: SeededUser;
+  };
+  /**
+   * F6's own organization. Kept separate from `main` for the same reason
+   * `saturated` and `lapsed` are: F6 needs a physiotherapist *assigned* to a
+   * clinic (nothing can be booked otherwise), while the main org's
+   * physiotherapist and clinic must both stay **unassigned** -- the F3 spec
+   * asserts exactly that on both sides while exercising assign-then-remove.
+   * Adding to `main` would also have eaten its Trial plan's user and clinic
+   * headroom, which the F3 create-user and F4 limit specs depend on.
+   */
+  f6: {
+    organizationId: string;
+    owner: SeededUser;
+    physio: SeededUser;
+    receptionist: SeededUser;
+    clinicId: string;
+    clinicName: string;
+    patientId: string;
+    patientName: string;
+    /** Tomorrow, for the scheduling and status-workflow specs. */
+    appointmentId: string;
+    /** The day after, left alone for the consultation spec. */
+    consultationAppointmentId: string;
   };
   /**
    * An organization that was subscribed and then lapsed. Kept separate from
@@ -262,6 +287,60 @@ export default async function globalSetup(): Promise<void> {
     .eq("id", lapsedOrgId);
   if (lapseError) throw lapseError;
 
+  // --- F6 org: clinical operations. Its own organization so that the
+  // assignments and appointments it needs cannot disturb the main org's
+  // deliberately-unassigned physiotherapist and clinic (load-bearing for the
+  // F3 assign/remove spec) or consume its Trial plan headroom. ---
+  const f6OrgId = await createOrganization(db, `${runId}-f6`);
+  createdOrganizationIds.push(f6OrgId);
+  const f6Owner = await user(f6OrgId, "ORG_OWNER", "f6-owner", "E2E F6 Owner");
+  await selectSubscriptionPlan(db as never, superAdmin.id, f6OrgId, "Trial");
+  await activateOrganizationSubscription(db as never, superAdmin.id, f6OrgId, "monthly");
+
+  const f6Physio = await user(f6OrgId, "ORG_PHYSIOTHERAPIST", "f6-physio", "E2E F6 Physio");
+  const f6Receptionist = await user(f6OrgId, "ORG_RECEPTIONIST", "f6-recep", "E2E F6 Reception");
+  const f6ClinicName = `${runId} F6 Clinic`;
+  const f6ClinicId = await createClinic(db, f6OrgId, f6ClinicName);
+
+  // The assignment that makes anything bookable at all: `createAppointment`
+  // requires the physiotherapist to be actively assigned to the clinic, and
+  // this setup created a clinic and a physio but never joined them before F6,
+  // so no appointment could be booked against the seed.
+  await assignUserToClinic(db as never, f6Owner.id, f6Physio.id, f6ClinicId);
+  // Reception books appointments, so they need the clinic in their accessible
+  // set -- unlike the main org's receptionist, whose *lack* of assignment is
+  // the F5 records-boundary fixture.
+  await assignUserToClinic(db as never, f6Owner.id, f6Receptionist.id, f6ClinicId);
+
+  const f6PatientName = "E2E F6 Patient";
+  const f6Patient = await createPatient(db as never, f6Owner.id, {
+    fullName: f6PatientName,
+    gender: "female",
+    phone: "9000000003",
+  });
+
+  function hoursFromNow(hours: number): string {
+    return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  }
+
+  const f6Appointment = await createAppointment(db as never, f6Owner.id, {
+    patientId: f6Patient.id,
+    clinicId: f6ClinicId,
+    physiotherapistId: f6Physio.id,
+    appointmentTime: hoursFromNow(24),
+    appointmentType: "therapy_session",
+  });
+
+  // A second appointment so the consultation spec can record against one
+  // without depending on the status spec having left the first alone.
+  const f6ConsultationAppointment = await createAppointment(db as never, f6Owner.id, {
+    patientId: f6Patient.id,
+    clinicId: f6ClinicId,
+    physiotherapistId: f6Physio.id,
+    appointmentTime: hoursFromNow(48),
+    appointmentType: "follow_up",
+  });
+
   const seed: SeedData = {
     runId,
     createdAuthUserIds,
@@ -279,6 +358,18 @@ export default async function globalSetup(): Promise<void> {
       packageId: mainPackage.id,
       packageName: mainPackage.package_name,
       assignedPackageId: mainAssignment.id,
+    },
+    f6: {
+      organizationId: f6OrgId,
+      owner: f6Owner,
+      physio: f6Physio,
+      receptionist: f6Receptionist,
+      clinicId: f6ClinicId,
+      clinicName: f6ClinicName,
+      patientId: f6Patient.id,
+      patientName: f6PatientName,
+      appointmentId: f6Appointment.id,
+      consultationAppointmentId: f6ConsultationAppointment.id,
     },
     saturated: { organizationId: saturatedOrgId, owner: saturatedOwner },
     unsubscribed: { organizationId: unsubscribedOrgId, owner: unsubscribedOwner },

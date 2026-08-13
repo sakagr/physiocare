@@ -18,6 +18,7 @@ import {
   getAccessibleClinicIds,
   assertOrganizationCanTransact,
 } from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreateAttendanceInput, UpdateAttendanceInput } from "../validators/attendance.validator";
@@ -146,7 +147,26 @@ export async function recordCheckOut(
     throw new AppError("Cannot check out a record with no check-in", ErrorCodes.ATTENDANCE_CHECK_IN_REQUIRED);
   }
 
-  return persistAttendanceUpdate(supabase, attendanceId, { check_out_time: new Date().toISOString() });
+  const updated = await persistAttendanceUpdate(supabase, attendanceId, {
+    check_out_time: new Date().toISOString(),
+  });
+
+  // Recording and correcting attendance are audited by
+  // attendance-workflow.service.ts, the sole public entry point for both. A
+  // check-out never changes `status`, so it can never affect availability and
+  // stays outside that workflow -- which left it the one attendance path with
+  // no audit entry until F6 (D6).
+  await recordAuditLogSafe(supabase, {
+    organizationId: attendance.organization_id,
+    userId: callerUserId,
+    action: "check_out",
+    entityName: "user_attendance",
+    entityId: attendance.id,
+    oldData: attendance,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**

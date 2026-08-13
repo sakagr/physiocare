@@ -41,7 +41,10 @@ const OWNER_CAPABILITIES: Capability[] = [
   "patients:manage",
   "patientRecords:delete",
   "appointments:oversee",
+  "appointments:manage",
   "attendance:oversee",
+  "attendance:record",
+  "attendance:manage",
   "invoices:access",
   "packages:view",
   "packages:manage",
@@ -68,10 +71,17 @@ const ADMIN_CAPABILITIES: Capability[] = OWNER_CAPABILITIES.filter(
     capability !== "compensation:view"
 );
 
+/**
+ * `attendance:record` (F6) is what gives a physiotherapist Flow 14: marking
+ * themselves unavailable. It does **not** imply `attendance:manage` -- the two
+ * cross rather than nest (D11), and a physiotherapist never records another
+ * person's attendance.
+ */
 const PHYSIO_CAPABILITIES: Capability[] = [
   "patients:view",
   "packages:view",
   "reports:view",
+  "attendance:record",
 ];
 
 /**
@@ -79,6 +89,12 @@ const PHYSIO_CAPABILITIES: Capability[] = [
  * ORG_FRONT_DESK_ROLES) but not the catalogue (ORG_MANAGEMENT_ROLES), and may
  * not delete a patient record -- the deliberate asymmetry against being able
  * to upload one.
+ *
+ * `attendance:manage` without `attendance:record` is the other half of F6's
+ * crossing (D11): reception records attendance *for other staff* and never
+ * their own. `UX.md`'s Screen Inventory previously said Owner/Admin only,
+ * contradicting Flow 14, which already assigned this to the
+ * attendance-management capability; Flow 14 was the correct side.
  */
 const RECEPTION_CAPABILITIES: Capability[] = [
   "patients:view",
@@ -86,6 +102,8 @@ const RECEPTION_CAPABILITIES: Capability[] = [
   "packages:view",
   "patientPackages:manage",
   "invoices:access",
+  "appointments:manage",
+  "attendance:manage",
 ];
 
 export const currentUserFixtures = {

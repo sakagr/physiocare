@@ -1,4 +1,11 @@
 import type { ErrorCode } from "@/server/errors";
+
+/**
+ * Re-exported so client features can name a code without importing from
+ * `@/server` themselves. The type is erased at build time; this module is
+ * already the one place the client-side code vocabulary is anchored.
+ */
+export type { ErrorCode };
 import { ApiError, TransportErrorCodes } from "./api-error";
 
 /**

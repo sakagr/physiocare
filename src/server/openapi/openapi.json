@@ -12,6 +12,176 @@
   ],
   "paths": {
     "/api/appointments/{id}/consultation": {
+      "get": {
+        "summary": "Get the consultation for an appointment, or null if not recorded yet",
+        "tags": [
+          "Appointments"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Appointment ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The appointment's consultation, or null when the visit has not been recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organization_id": {
+                          "type": "string"
+                        },
+                        "appointment_id": {
+                          "type": "string"
+                        },
+                        "patient_id": {
+                          "type": "string"
+                        },
+                        "physiotherapist_id": {
+                          "type": "string"
+                        },
+                        "symptoms": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "pain_areas": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "pain_scale": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "diagnosis_notes": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "followup_notes": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organization_id",
+                        "appointment_id",
+                        "patient_id",
+                        "physiotherapist_id",
+                        "symptoms",
+                        "pain_areas",
+                        "pain_scale",
+                        "diagnosis_notes",
+                        "followup_notes",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized -- no active session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Unauthorized -- no active session."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden -- insufficient privileges.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Forbidden -- insufficient privileges."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Not found."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                  "description": "Internal Server Error."
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Create the consultation for an appointment",
         "tags": [
@@ -423,6 +593,93 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "patient": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "patient_code": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "full_name",
+                            "patient_code"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "physiotherapist": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "full_name"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "clinic": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "clinic_name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "clinic_name"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "allowedTransitions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "scheduled",
+                          "confirmed",
+                          "checked_in",
+                          "completed",
+                          "cancelled",
+                          "no_show"
+                        ]
+                      }
+                    },
+                    "canManageConsultation": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -438,7 +695,12 @@
                     "created_by",
                     "created_at",
                     "updated_at",
-                    "deleted_at"
+                    "deleted_at",
+                    "patient",
+                    "physiotherapist",
+                    "clinic",
+                    "allowedTransitions",
+                    "canManageConsultation"
                   ]
                 }
               }
@@ -1512,6 +1774,93 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "patient": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "full_name": {
+                                    "type": "string"
+                                  },
+                                  "patient_code": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "full_name",
+                                  "patient_code"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "physiotherapist": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "full_name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "full_name"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "clinic": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "clinic_name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "clinic_name"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "allowedTransitions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "scheduled",
+                                "confirmed",
+                                "checked_in",
+                                "completed",
+                                "cancelled",
+                                "no_show"
+                              ]
+                            }
+                          },
+                          "canManageConsultation": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -1527,7 +1876,12 @@
                           "created_by",
                           "created_at",
                           "updated_at",
-                          "deleted_at"
+                          "deleted_at",
+                          "patient",
+                          "physiotherapist",
+                          "clinic",
+                          "allowedTransitions",
+                          "canManageConsultation"
                         ]
                       }
                     },
@@ -18312,7 +18666,10 @@
                           "patients:manage",
                           "patientRecords:delete",
                           "appointments:oversee",
+                          "appointments:manage",
                           "attendance:oversee",
+                          "attendance:record",
+                          "attendance:manage",
                           "invoices:access",
                           "packages:view",
                           "packages:manage",

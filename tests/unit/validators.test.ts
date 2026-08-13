@@ -160,6 +160,21 @@ describe("consultation validator", () => {
     expect(() => validateCreateConsultationInput({ ...validConsultationInput(uuid), painScale: 11 })).toThrow();
     expect(() => validateCreateConsultationInput({ ...validConsultationInput(uuid), appointmentId: "not-a-uuid" })).toThrow();
   });
+
+  it("never admits patient or physiotherapist, on create or update (F6, D14)", () => {
+    // Half of the equivalence D14 relies on: `canManageConsultation` (keyed on
+    // the appointment) and `canManagePrescription` (keyed on the consultation)
+    // agree only because a consultation's physiotherapist is copied from its
+    // appointment and can never afterwards diverge. The service does the
+    // copying; this pins that no input shape can undo it. The other half --
+    // that the two predicates then agree in practice -- is asserted against
+    // real rows in tests/integration/consultations.test.ts.
+    const spoofed = { ...validConsultationInput(uuid), physiotherapistId: "user-other", patientId: "patient-other" };
+    expect(validateCreateConsultationInput(spoofed)).not.toHaveProperty("physiotherapistId");
+    expect(validateCreateConsultationInput(spoofed)).not.toHaveProperty("patientId");
+    expect(validateUpdateConsultationInput(spoofed)).not.toHaveProperty("physiotherapistId");
+    expect(validateUpdateConsultationInput(spoofed)).not.toHaveProperty("patientId");
+  });
 });
 
 describe("prescription validator", () => {

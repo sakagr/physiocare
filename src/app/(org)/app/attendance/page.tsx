@@ -1,11 +1,5 @@
-import { DestinationStub } from "@/components/shell/destination-stub";
+import { AttendancePageContent } from "@/features/attendance";
 
 export default function AttendancePage() {
-  return (
-    <DestinationStub
-      title="Attendance"
-      phase="F6"
-      description="Review staff attendance and physiotherapist availability."
-    />
-  );
+  return <AttendancePageContent />;
 }

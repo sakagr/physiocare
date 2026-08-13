@@ -6,6 +6,44 @@ export type InsertAppointment = Database["public"]["Tables"]["appointments"]["In
 export type UpdateAppointment = Database["public"]["Tables"]["appointments"]["Update"];
 
 /**
+ * The display projection embedded in appointment *reads* (F6, D1).
+ *
+ * Every F6 appointment surface renders patient, physiotherapist and clinic
+ * *names* against a row that carries only UUIDs. This is embedded in the read
+ * rather than exposed as a database view: a view forces the write-then-re-read
+ * round trip `patient_packages_view` pays, widens every column to nullable,
+ * and freezes its column list behind a parity test.
+ *
+ * `physiotherapist` must name its foreign key explicitly. `appointments` has
+ * *two* foreign keys into `users` -- `physiotherapist_id` and `created_by` --
+ * so an unqualified `users(...)` embed is ambiguous and PostgREST rejects it.
+ *
+ * Each embed is nullable because a joined row filtered by RLS comes back as
+ * `null` rather than as an error (ADR-0011). In practice it is never null for
+ * a caller who can see the appointment at all; that is proved through real
+ * session clients per role in `tests/integration/appointments.test.ts`, which
+ * is a hard requirement of this design rather than incidental coverage.
+ *
+ * The embeds carry no liveness filter of their own, so a soft-deleted patient,
+ * physiotherapist or clinic still renders its name here. That is deliberate:
+ * the appointment's reference is historical, and a schedule row showing a
+ * blank name because the patient was later removed would be worse than one
+ * naming who it was actually for.
+ */
+const APPOINTMENT_DISPLAY_SELECT =
+  "*, patient:patients(id, full_name, patient_code), " +
+  "physiotherapist:users!appointments_organization_id_physiotherapist_id_fkey(id, full_name), " +
+  "clinic:clinics(id, clinic_name)";
+
+export interface AppointmentDisplay {
+  patient: { id: string; full_name: string; patient_code: string } | null;
+  physiotherapist: { id: string; full_name: string } | null;
+  clinic: { id: string; clinic_name: string } | null;
+}
+
+export type AppointmentWithDisplay = Appointment & AppointmentDisplay;
+
+/**
  * Inserts a new appointment record.
  */
 export async function insertAppointment(
@@ -66,6 +104,32 @@ export async function findAppointmentById(
 }
 
 /**
+ * Finds an active appointment by ID with its display projection.
+ *
+ * Kept separate from `findAppointmentById` rather than replacing it. That
+ * function is called by the authorization predicates, the workflow services,
+ * and the admin-client system paths (`cancelAppointmentAsSystem`) -- none of
+ * which render anything, and none of which should pay a three-table join or
+ * see a widened row type.
+ */
+export async function findAppointmentWithDisplayById(
+  supabase: SupabaseClient<Database>,
+  appointmentId: string
+): Promise<AppointmentWithDisplay | null> {
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(APPOINTMENT_DISPLAY_SELECT)
+    .eq("id", appointmentId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data as AppointmentWithDisplay | null;
+}
+
+/**
  * Checks whether any active appointment references the given patient.
  */
 export async function existsAppointmentForPatient(
@@ -85,7 +149,11 @@ export async function existsAppointmentForPatient(
 }
 
 /**
- * Lists active appointments within an organization with filter and pagination support.
+ * Lists active appointments within an organization with filter and pagination
+ * support, each carrying its display projection (see
+ * `APPOINTMENT_DISPLAY_SELECT`). Changed in place rather than added alongside:
+ * `listOrganizationAppointments` is its only caller, and every consumer of
+ * that listing renders names.
  */
 export async function listAppointments(
   supabase: SupabaseClient<Database>,
@@ -101,13 +169,13 @@ export async function listAppointments(
     dateFrom?: string;
     dateTo?: string;
   }
-): Promise<Appointment[]> {
+): Promise<AppointmentWithDisplay[]> {
   const from = (filters.page - 1) * filters.limit;
   const to = from + filters.limit - 1;
 
   let query = supabase
     .from("appointments")
-    .select("*")
+    .select(APPOINTMENT_DISPLAY_SELECT)
     .eq("organization_id", organizationId)
     .is("deleted_at", null);
 
@@ -139,7 +207,7 @@ export async function listAppointments(
   if (error) {
     throw error;
   }
-  return data;
+  return data as unknown as AppointmentWithDisplay[];
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   getAccessibleClinicIds,
   assertOrganizationCanTransact,
 } from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePrescriptionInput, UpdatePrescriptionInput } from "../validators/prescription.validator";
@@ -53,7 +54,7 @@ export async function createPrescription(
   // caller, and canManagePrescription admits SUPER_ADMIN, which has none.
   await assertOrganizationCanTransact(supabase, consultation.organization_id);
 
-  return insertPrescription(supabase, {
+  const created = await insertPrescription(supabase, {
     organization_id: consultation.organization_id,
     consultation_id: consultation.id,
     patient_id: consultation.patient_id,
@@ -61,6 +62,17 @@ export async function createPrescription(
     advice: input.advice || null,
     followup_date: input.followupDate || null,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: created.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "prescriptions",
+    entityId: created.id,
+    newData: created,
+  });
+
+  return created;
 }
 
 /**
@@ -85,10 +97,22 @@ export async function updatePrescription(
   // Resource-anchored for the same reason as createPrescription, above.
   await assertOrganizationCanTransact(supabase, prescription.organization_id);
 
-  return persistPrescriptionUpdate(supabase, prescriptionId, {
+  const updated = await persistPrescriptionUpdate(supabase, prescriptionId, {
     advice: input.advice !== undefined ? input.advice || null : undefined,
     followup_date: input.followupDate !== undefined ? input.followupDate || null : undefined,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: prescription.organization_id,
+    userId: callerUserId,
+    action: "update",
+    entityName: "prescriptions",
+    entityId: prescription.id,
+    oldData: prescription,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**

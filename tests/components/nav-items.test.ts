@@ -57,26 +57,48 @@ describe("buildNavSections", () => {
     expect(labelsFor(admin.capabilities)).toEqual(labelsFor(owner.capabilities));
   });
 
-  it("gives a physiotherapist a deliberately short nav", () => {
+  it("gives a physiotherapist a shorter nav that still reaches their daily work", () => {
     const physio = currentUserFixtures.physiotherapist();
 
     expect(labelsFor(physio.capabilities)).toEqual([
       "Dashboard",
       "Patients",
+      "Appointments",
+      "Attendance",
       "Packages",
       "Reports",
     ]);
   });
 
-  it("gives a receptionist their billing-oriented nav", () => {
+  it("gives a receptionist their front-desk nav", () => {
     const reception = currentUserFixtures.receptionist();
 
     expect(labelsFor(reception.capabilities)).toEqual([
       "Dashboard",
       "Patients",
+      "Appointments",
+      "Attendance",
       "Invoices",
       "Packages",
     ]);
+  });
+
+  /**
+   * Appointments and Attendance carry no capability at all (F6, D11), so they
+   * survive an empty capability set exactly as Dashboard does. Their contents
+   * are scoped per role by the service layer instead -- a physiotherapist's
+   * appointment list is their own, a receptionist's is their accessible
+   * clinics -- and the org-wide framing inside each stays gated on the
+   * `:oversee` tokens.
+   *
+   * Ungating them was not a shortcut: `canViewAppointments` is "any active org
+   * member", so a token for it would be granted to every org user and gate
+   * nothing; and Attendance is reached through three different capabilities
+   * (`attendance:record` for the physio, `attendance:manage` for reception,
+   * either for management), which one capability field cannot express.
+   */
+  it("leaves the ungated clinical destinations reachable with no capabilities", () => {
+    expect(labelsFor([])).toEqual(["Dashboard", "Appointments", "Attendance"]);
   });
 
   it("omits a group header when capability filtering empties the group", () => {
@@ -91,10 +113,6 @@ describe("buildNavSections", () => {
       "Clinical",
       "Billing & catalog",
     ]);
-  });
-
-  it("leaves only the ungrouped dashboard when no capabilities are held", () => {
-    expect(labelsFor([])).toEqual(["Dashboard"]);
   });
 
   it("points every item at a destination under the org namespace", () => {

@@ -4,6 +4,6 @@
  * deep paths (AGENTS.md → Project Structure). This module depends on
  * neither `users` nor `clinics`, so both may depend on it without a cycle.
  */
-export { userClinicsQueryKeys } from "./queries";
+export { userClinicsQueryKeys, clinicUsersQueryOptions } from "./queries";
 export { UserClinicsSection } from "./components/user-clinics-section";
 export { ClinicMembersSection } from "./components/clinic-members-section";

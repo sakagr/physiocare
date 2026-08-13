@@ -96,4 +96,22 @@ describeIntegration("Prescription lifecycle", () => {
     const physioView = await listOrganizationPrescriptions(ctx.admin, physio.id, { page: 1, limit: 50 });
     expect(physioView.items.map((p) => p.id)).toEqual([prescription.id]);
   });
+
+  it("records create and update audit entries against the prescription (F6 task 7, D6)", async () => {
+    const { physio, consultation } = await setupConsultation("audit");
+
+    const prescription = await createPrescription(ctx.admin, physio.id, validPrescriptionInput(consultation.id));
+    await updatePrescription(ctx.admin, physio.id, prescription.id, { advice: "Ice twice daily" });
+
+    const { data: logs, error } = await ctx.admin
+      .from("audit_logs")
+      .select("*")
+      .eq("entity_id", prescription.id)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+
+    expect(logs!.map((log) => log.action)).toEqual(["create", "update"]);
+    expect(logs!.every((log) => log.entity_name === "prescriptions")).toBe(true);
+    expect(logs![1].new_data).toMatchObject({ advice: "Ice twice daily" });
+  });
 });

@@ -39,6 +39,8 @@ describe("OrgShell", () => {
     expect(links.map((link) => link.textContent)).toEqual([
       "Dashboard",
       "Patients",
+      "Appointments",
+      "Attendance",
       "Invoices",
       "Packages",
     ]);

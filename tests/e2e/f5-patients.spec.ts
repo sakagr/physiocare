@@ -50,7 +50,7 @@ test.describe("F5 — patients", () => {
     await expect(page.getByRole("button", { name: "Create patient" })).toBeEnabled();
   });
 
-  test("opens the workspace and moves between its three tabs", async ({ page }) => {
+  test("opens the workspace and moves between its tabs", async ({ page }) => {
     const seed = readSeed();
     await signIn(page, seed.main.owner.username, seed.main.owner.password);
     await page.goto(`/app/patients/${seed.main.patientId}`);
@@ -58,12 +58,13 @@ test.describe("F5 — patients", () => {
     await expect(page.getByRole("heading", { name: "E2E Seeded Patient" })).toBeVisible();
     await expect(page.getByText(seed.main.patientCode).first()).toBeVisible();
 
-    // Exactly the three sections F5 owns -- appointments and invoices are not
-    // stubbed, so their tabs must be absent rather than present-and-empty.
+    // The three sections F5 owns, plus the Appointments tab F6 appended at
+    // the route (updated in F6). Invoices is still not stubbed, so its tab
+    // must stay absent rather than present-and-empty until F7 builds it.
     await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Records" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Packages" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Appointments" })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Appointments" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Invoices" })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Packages" }).click();

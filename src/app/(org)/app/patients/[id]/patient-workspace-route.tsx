@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { PatientWorkspace, PatientOverviewTab, PatientRecordsTab } from "@/features/patients";
 import { PatientPackagesTab } from "@/features/patient-packages";
+import { PatientAppointmentsTab } from "@/features/appointments";
 import { packagesListQueryOptions } from "@/features/packages";
 
 /**
@@ -15,6 +16,9 @@ import { packagesListQueryOptions } from "@/features/packages";
  *
  * Only active packages are offered -- assigning a withdrawn package would
  * contradict what deactivation means.
+ *
+ * F6 appended the Appointments tab here, changing nothing inside
+ * `src/features/patients/` -- the seam F5 documented held.
  */
 export function PatientWorkspaceRoute({ patientId }: { patientId: string }) {
   const catalogue = useQuery(packagesListQueryOptions({ page: 1, limit: 100, isActive: true }));
@@ -27,11 +31,15 @@ export function PatientWorkspaceRoute({ patientId }: { patientId: string }) {
   return (
     <PatientWorkspace
       patientId={patientId}
-      // Exactly the three sections F5 owns. Appointments (F6) and Invoices
-      // (F7) are deliberately not stubbed: a placeholder tab promises a thing
-      // that does not exist.
+      // Invoices (F7) is deliberately still not stubbed: a placeholder tab
+      // promises a thing that does not exist.
       tabs={[
         { value: "overview", label: "Overview", content: <PatientOverviewTab patientId={patientId} /> },
+        {
+          value: "appointments",
+          label: "Appointments",
+          content: <PatientAppointmentsTab patientId={patientId} />,
+        },
         { value: "records", label: "Records", content: <PatientRecordsTab patientId={patientId} /> },
         {
           value: "packages",

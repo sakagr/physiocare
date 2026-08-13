@@ -16,9 +16,11 @@ import {
   canViewConsultations,
   canManageConsultation,
   canAccessConsultation,
+  canAccessAppointment,
   getAccessibleClinicIds,
   assertOrganizationCanTransact,
 } from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreateConsultationInput, UpdateConsultationInput } from "../validators/consultation.validator";
@@ -66,7 +68,7 @@ export async function createConsultation(
     throw new AppError("Physiotherapist is no longer assigned to the appointment's clinic", ErrorCodes.FORBIDDEN);
   }
 
-  return insertConsultation(supabase, {
+  const created = await insertConsultation(supabase, {
     organization_id: appointment.organization_id,
     appointment_id: appointment.id,
     patient_id: appointment.patient_id,
@@ -77,6 +79,17 @@ export async function createConsultation(
     diagnosis_notes: input.diagnosisNotes || null,
     followup_notes: input.followupNotes || null,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: created.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "consultations",
+    entityId: created.id,
+    newData: created,
+  });
+
+  return created;
 }
 
 /**
@@ -101,13 +114,25 @@ export async function updateConsultation(
   // Resource-anchored for the same reason as createConsultation, above.
   await assertOrganizationCanTransact(supabase, consultation.organization_id);
 
-  return persistConsultationUpdate(supabase, consultationId, {
+  const updated = await persistConsultationUpdate(supabase, consultationId, {
     symptoms: input.symptoms !== undefined ? input.symptoms || null : undefined,
     pain_areas: input.painAreas !== undefined ? input.painAreas : undefined,
     pain_scale: input.painScale !== undefined ? input.painScale ?? null : undefined,
     diagnosis_notes: input.diagnosisNotes !== undefined ? input.diagnosisNotes || null : undefined,
     followup_notes: input.followupNotes !== undefined ? input.followupNotes || null : undefined,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: consultation.organization_id,
+    userId: callerUserId,
+    action: "update",
+    entityName: "consultations",
+    entityId: consultation.id,
+    oldData: consultation,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**
@@ -129,6 +154,43 @@ export async function getConsultationDetails(
   }
 
   return consultation;
+}
+
+/**
+ * Fetches the consultation recorded for an appointment, or `null` if the
+ * visit has not been recorded yet (F6, D5).
+ *
+ * **`null` is a success, not a 404.** The consultation destination is routed
+ * by appointment id and must decide between the create form and the edit form
+ * before it can render anything; "not started yet" is the *normal* state
+ * there, and a 404 would route the client into the not-found frame per
+ * `UX.md`'s error table. The alternatives both cost more: creating blind and
+ * catching `CONSULTATION_ALREADY_EXISTS` is 409-as-control-flow and still
+ * cannot fetch the existing row, and filtering the list endpoint by patient
+ * over-fetches to answer a singleton question.
+ *
+ * Authorized on the **appointment's** read boundary rather than the
+ * consultation's: a caller who may see the appointment must be able to learn
+ * that it has no consultation, and when one exists the two boundaries agree
+ * anyway -- `canAccessConsultation` resolves a receptionist through that same
+ * appointment's clinic.
+ */
+export async function getConsultationForAppointment(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  appointmentId: string
+): Promise<Consultation | null> {
+  const appointment = await findAppointmentById(supabase, appointmentId);
+  if (!appointment) {
+    throw new AppError("Appointment not found", ErrorCodes.NOT_FOUND);
+  }
+
+  const isAuthorized = await canAccessAppointment(supabase, callerUserId, appointmentId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
+  }
+
+  return findConsultationByAppointmentId(supabase, appointmentId);
 }
 
 /**

@@ -153,4 +153,33 @@ describeIntegration("Attendance lifecycle", () => {
       })
     ).rejects.toMatchObject({ code: "23514" });
   });
+
+  it("records a check_out audit entry (F6 task 7, D6)", async () => {
+    const organization = await ctx.createOrganization(`${ctx.runId}-audit-org`);
+    const owner = await ctx.createUser(organization.id, "ORG_OWNER", "audit-owner");
+    const clinic = await createClinic(ctx.admin, owner.id, validClinicInput(`${ctx.runId}-audit`));
+    const physio = await ctx.createUser(organization.id, "ORG_PHYSIOTHERAPIST", "audit-physio");
+    await assignUserToClinic(ctx.admin, owner.id, physio.id, clinic.id);
+
+    const attendance = await recordCheckIn(ctx.admin, physio.id, validAttendanceInput({ clinicId: clinic.id }));
+    await recordCheckOut(ctx.admin, physio.id, attendance.id);
+
+    const { data: logs, error } = await ctx.admin
+      .from("audit_logs")
+      .select("*")
+      .eq("entity_id", attendance.id)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+
+    // Recording and correcting attendance are already audited by the
+    // availability phase, from attendance-workflow.service.ts. `recordCheckOut`
+    // sits outside that workflow -- a check-out never changes `status`, so it
+    // can never affect availability -- and was the one attendance path with no
+    // entry. Calling recordCheckIn directly here (not through the workflow)
+    // isolates the check-out entry.
+    expect(logs!.map((log) => log.action)).toEqual(["check_out"]);
+    expect(logs![0]).toMatchObject({ entity_name: "user_attendance", user_id: physio.id });
+    expect(logs![0].old_data).toMatchObject({ check_out_time: null });
+    expect((logs![0].new_data as { check_out_time: string | null }).check_out_time).not.toBeNull();
+  });
 });

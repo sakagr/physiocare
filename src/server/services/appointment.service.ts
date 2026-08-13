@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import type { Appointment } from "../repositories/appointment.repository";
+import type { Appointment, AppointmentWithDisplay } from "../repositories/appointment.repository";
 import {
   insertAppointment,
   updateAppointment as persistAppointmentUpdate,
   findAppointmentById,
+  findAppointmentWithDisplayById,
   listAppointments,
   countAppointments,
 } from "../repositories/appointment.repository";
@@ -22,6 +23,7 @@ import {
   getAccessibleClinicIds,
   assertOrganizationCanTransact,
 } from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreateAppointmentInput, UpdateAppointmentInput, UpdateAppointmentStatusInput } from "../validators/appointment.validator";
@@ -44,12 +46,129 @@ const LEGAL_APPOINTMENT_STATUS_TRANSITIONS: Record<AppointmentStatus, Appointmen
 };
 
 /**
+ * Audit verb per target status (F6, D15). Domain verbs, not `update`: a
+ * lifecycle transition and a field edit must be tellable apart by action
+ * alone, so an auditor filtering `entityName = appointments` never has to
+ * diff snapshots to find out which happened.
+ */
+const STATUS_AUDIT_ACTIONS: Record<AppointmentStatus, string> = {
+  scheduled: "reschedule",
+  confirmed: "confirm",
+  checked_in: "check_in",
+  completed: "complete",
+  cancelled: "cancel",
+  no_show: "no_show",
+};
+
+/**
  * Pure transition-legality check, exported so appointment-workflow.service.ts
  * can fail fast before triggering a package-session side effect, without
  * duplicating this matrix.
  */
 export function isLegalAppointmentStatusTransition(from: AppointmentStatus, to: AppointmentStatus): boolean {
   return LEGAL_APPOINTMENT_STATUS_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * Per-item permission hints on an appointment read (F6, D13; ADR-0010).
+ *
+ * `allowedTransitions` carries both facts that decide whether to render a
+ * status control -- may this caller act on this row, and is the transition
+ * legal from its current status -- so the client renders one control per
+ * element and holds no copy of the transition matrix. A `canManage: boolean`
+ * would have carried only the first, forcing the matrix to be mirrored
+ * client-side where it would drift silently.
+ *
+ * Advisory only: `canAccessAppointment`, `canManageConsultation` and the
+ * matrix itself remain the security boundary, unchanged by these fields.
+ */
+export interface AppointmentHints {
+  allowedTransitions: AppointmentStatus[];
+  /** Also governs the prescription section -- see `resolveAppointmentHints`. */
+  canManageConsultation: boolean;
+}
+
+export type AppointmentReadModel = AppointmentWithDisplay & AppointmentHints;
+
+/**
+ * The caller facts every hint on a page is computed from, resolved **once**
+ * per request rather than per row.
+ *
+ * `canAccessAppointment` costs two to three lookups per call, so calling it
+ * per row would be an N+1 of 50-75 queries over a page of 25. This mirrors
+ * `listOrganizationUsers`'s shape (`user.service.ts`), which resolves the
+ * caller's role once and derives `canManage` in memory for the same reason.
+ */
+interface HintContext {
+  callerUserId: string;
+  roleName: string | undefined;
+  /** Resolved only for a receptionist; nobody else's access depends on it. */
+  accessibleClinicIds: string[];
+}
+
+async function resolveHintContext(
+  supabase: SupabaseClient<Database>,
+  callerUserId: string,
+  roleName: string | undefined
+): Promise<HintContext> {
+  const accessibleClinicIds =
+    roleName === "ORG_RECEPTIONIST" ? await getAccessibleClinicIds(supabase, callerUserId) : [];
+  return { callerUserId, roleName, accessibleClinicIds };
+}
+
+/**
+ * In-memory mirror of `canAccessAppointment`, evaluated against a row already
+ * in hand.
+ *
+ * **This conjunct cannot currently return false for a row the caller was
+ * listed** -- `listOrganizationAppointments` and `canAccessAppointment`
+ * partition the organization identically, role for role, and
+ * `getAppointmentDetails` returns 403 before any hint is computed. It is kept
+ * deliberately rather than simplified away: that agreement is not stable. F5
+ * widened Reception from clinic-scoped to organization-wide for patients and
+ * patient records, in both the predicate and RLS, when the narrower scoping
+ * made Flow 4 impossible for its own primary actor -- appointments are the
+ * same shape and the same role. The day the listing is widened without the
+ * predicate, this is what stops the UI offering actions the server refuses.
+ *
+ * The invariant that makes it redundant today is asserted, in that one
+ * direction only, by "never lists a row the caller may not act on, for any
+ * role" in `tests/integration/appointments.test.ts`. If that test fails, this
+ * conjunct has started doing real work.
+ */
+function callerCanAccess(appointment: Appointment, context: HintContext): boolean {
+  if (context.roleName === "SUPER_ADMIN") return true;
+  if (context.roleName === "ORG_OWNER" || context.roleName === "ORG_ADMIN") return true;
+  if (appointment.physiotherapist_id === context.callerUserId) return true;
+  if (context.roleName === "ORG_RECEPTIONIST") {
+    return context.accessibleClinicIds.includes(appointment.clinic_id);
+  }
+  return false;
+}
+
+/**
+ * Computes both hints for one row. `canManageConsultation` mirrors the
+ * predicate of the same name and **also governs the prescription section**
+ * (D14): `canManagePrescription` keys on the consultation, but a
+ * consultation's `physiotherapist_id` is copied from its appointment at
+ * create and no input shape can change it afterwards, so the two predicates
+ * agree for every consultation reachable from this row. Pinned by
+ * "agrees between canManageConsultation and canManagePrescription for every
+ * role" in `tests/integration/consultations.test.ts`.
+ */
+function resolveAppointmentHints(appointment: Appointment, context: HintContext): AppointmentHints {
+  const canManageConsultation =
+    context.roleName === "SUPER_ADMIN" ||
+    context.roleName === "ORG_OWNER" ||
+    context.roleName === "ORG_ADMIN" ||
+    appointment.physiotherapist_id === context.callerUserId;
+
+  return {
+    allowedTransitions: callerCanAccess(appointment, context)
+      ? LEGAL_APPOINTMENT_STATUS_TRANSITIONS[appointment.status]
+      : [],
+    canManageConsultation,
+  };
 }
 
 /**
@@ -170,7 +289,7 @@ export async function createAppointment(
 
   await assertPhysiotherapistAvailable(supabase, caller.organization_id, physiotherapist.id, input.appointmentTime);
 
-  return insertAppointment(supabase, {
+  const created = await insertAppointment(supabase, {
     organization_id: caller.organization_id,
     patient_id: patient.id,
     clinic_id: clinic.id,
@@ -180,6 +299,17 @@ export async function createAppointment(
     notes: input.notes || null,
     created_by: callerUserId,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: created.organization_id,
+    userId: callerUserId,
+    action: "create",
+    entityName: "appointments",
+    entityId: created.id,
+    newData: created,
+  });
+
+  return created;
 }
 
 /**
@@ -222,11 +352,23 @@ export async function updateAppointment(
     );
   }
 
-  return persistAppointmentUpdate(supabase, appointmentId, {
+  const updated = await persistAppointmentUpdate(supabase, appointmentId, {
     appointment_time: input.appointmentTime,
     appointment_type: input.appointmentType,
     notes: input.notes !== undefined ? input.notes || null : undefined,
   });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: appointment.organization_id,
+    userId: callerUserId,
+    action: "update",
+    entityName: "appointments",
+    entityId: appointment.id,
+    oldData: appointment,
+    newData: updated,
+  });
+
+  return updated;
 }
 
 /**
@@ -262,6 +404,21 @@ export async function updateAppointmentStatus(
 
   const previousStatus = appointment.status;
   const updated = await persistAppointmentUpdate(supabase, appointmentId, { status: input.status });
+
+  // The target status is the audit verb, not a generic `update`: a lifecycle
+  // transition and a field edit must be distinguishable by action alone
+  // (AGENTS.md -> Audit Logging). `transitionAppointmentStatus` delegates
+  // here rather than writing its own entry, so a workflow-driven transition
+  // produces exactly one.
+  await recordAuditLogSafe(supabase, {
+    organizationId: appointment.organization_id,
+    userId: callerUserId,
+    action: STATUS_AUDIT_ACTIONS[input.status],
+    entityName: "appointments",
+    entityId: appointment.id,
+    oldData: appointment,
+    newData: updated,
+  });
 
   await insertAppointmentStatusLog(supabase, {
     organization_id: appointment.organization_id,
@@ -323,6 +480,20 @@ export async function cancelAppointmentAsSystem(
   const previousStatus = appointment.status;
   const updated = await persistAppointmentUpdate(adminClient, appointmentId, { status: "cancelled" });
 
+  // `auto_cancel`, deliberately distinct from a person's `cancel`. "Was this
+  // cancelled by someone or by the availability workflow?" is the first
+  // question asked of a cancelled appointment, and `changed_by` cannot answer
+  // it -- the status log records the user who marked the absence either way.
+  await recordAuditLogSafe(adminClient, {
+    organizationId: appointment.organization_id,
+    userId: changedByUserId,
+    action: "auto_cancel",
+    entityName: "appointments",
+    entityId: appointment.id,
+    oldData: appointment,
+    newData: updated,
+  });
+
   await insertAppointmentStatusLog(adminClient, {
     organization_id: appointment.organization_id,
     appointment_id: appointment.id,
@@ -364,18 +535,33 @@ export async function deleteAppointment(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return persistAppointmentUpdate(supabase, appointmentId, { deleted_at: new Date().toISOString() });
+  const deleted = await persistAppointmentUpdate(supabase, appointmentId, {
+    deleted_at: new Date().toISOString(),
+  });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: appointment.organization_id,
+    userId: callerUserId,
+    action: "delete",
+    entityName: "appointments",
+    entityId: appointment.id,
+    oldData: appointment,
+  });
+
+  return deleted;
 }
 
 /**
- * Fetches the details of an active appointment, scoped to the caller's role.
+ * Fetches the details of an active appointment, scoped to the caller's role,
+ * with its display projection (D1). A read, so it carries the projection;
+ * the write paths return the bare row (D12).
  */
 export async function getAppointmentDetails(
   supabase: SupabaseClient<Database>,
   callerUserId: string,
   appointmentId: string
-): Promise<Appointment> {
-  const appointment = await findAppointmentById(supabase, appointmentId);
+): Promise<AppointmentReadModel> {
+  const appointment = await findAppointmentWithDisplayById(supabase, appointmentId);
   if (!appointment) {
     throw new AppError("Appointment not found", ErrorCodes.NOT_FOUND);
   }
@@ -385,7 +571,11 @@ export async function getAppointmentDetails(
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
 
-  return appointment;
+  const caller = await findUserById(supabase, callerUserId);
+  const callerRole = caller ? await findRoleById(supabase, caller.role_id) : null;
+  const context = await resolveHintContext(supabase, callerUserId, callerRole?.name);
+
+  return { ...appointment, ...resolveAppointmentHints(appointment, context) };
 }
 
 /**
@@ -398,7 +588,7 @@ export async function listOrganizationAppointments(
   supabase: SupabaseClient<Database>,
   callerUserId: string,
   filters: AppointmentListFilters
-): Promise<PagedResult<Appointment>> {
+): Promise<PagedResult<AppointmentReadModel>> {
   const isAuthorized = await canViewAppointments(supabase, callerUserId);
   if (!isAuthorized) {
     throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
@@ -412,10 +602,14 @@ export async function listOrganizationAppointments(
   const callerRole = await findRoleById(supabase, caller.role_id);
   const scopedFilters: AppointmentListFilters & { clinicIds?: string[] } = { ...filters };
 
+  // Resolved once, and reused as the hint context below rather than looked up
+  // a second time per page.
+  const accessibleClinicIds =
+    callerRole?.name === "ORG_RECEPTIONIST" ? await getAccessibleClinicIds(supabase, callerUserId) : [];
+
   if (callerRole?.name === "ORG_PHYSIOTHERAPIST") {
     scopedFilters.physiotherapistId = callerUserId;
   } else if (callerRole?.name === "ORG_RECEPTIONIST") {
-    const accessibleClinicIds = await getAccessibleClinicIds(supabase, callerUserId);
     if (filters.clinicId) {
       if (!accessibleClinicIds.includes(filters.clinicId)) {
         return { items: [], total: 0, page: filters.page, pageSize: filters.limit, totalPages: 0 };
@@ -431,8 +625,15 @@ export async function listOrganizationAppointments(
   const appointments = await listAppointments(supabase, caller.organization_id, scopedFilters);
   const total = await countAppointments(supabase, caller.organization_id, scopedFilters);
 
+  // In-memory per row: no predicate call per appointment, and no query inside
+  // this loop (see `resolveHintContext`).
+  const context: HintContext = { callerUserId, roleName: callerRole?.name, accessibleClinicIds };
+
   return {
-    items: appointments,
+    items: appointments.map((appointment) => ({
+      ...appointment,
+      ...resolveAppointmentHints(appointment, context),
+    })),
     total,
     page: filters.page,
     pageSize: filters.limit,

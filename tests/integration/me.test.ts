@@ -26,7 +26,10 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
       expect.arrayContaining<Capability>([
         "patients:view",
         "appointments:oversee",
+        "appointments:manage",
         "attendance:oversee",
+        "attendance:record",
+        "attendance:manage",
         "invoices:access",
         "packages:view",
         "reports:view",
@@ -54,7 +57,10 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
         "settings:manage",
         "auditLogs:view",
         "appointments:oversee",
+        "appointments:manage",
         "attendance:oversee",
+        "attendance:record",
+        "attendance:manage",
         "invoices:access",
         "reports:view",
       ])
@@ -63,7 +69,7 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
     expect(me.capabilities).not.toContain("organization:manage");
   });
 
-  it("limits a physiotherapist to patients, packages, and reports", async () => {
+  it("limits a physiotherapist to patients, packages, reports, and recording their own attendance", async () => {
     const organization = await ctx.createOrganization(`${ctx.runId}-physio-org`);
     const physio = await ctx.createUser(organization.id, "ORG_PHYSIOTHERAPIST", "physio");
 
@@ -71,9 +77,16 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
 
     expect(me.group).toBe("org");
     expect(me.role.displayName).toBe("Physiotherapist");
+    // `attendance:record` (F6) is what gives a physiotherapist Flow 14 at all:
+    // marking themselves unavailable is the flow's whole point, and before it
+    // they held no attendance token of any kind.
     expect([...me.capabilities].sort()).toEqual(
-      (["packages:view", "patients:view", "reports:view"] as Capability[]).sort()
+      (["attendance:record", "packages:view", "patients:view", "reports:view"] as Capability[]).sort()
     );
+    // The two attendance capabilities cross rather than nest (D11): a
+    // physiotherapist records their own and never another's.
+    expect(me.capabilities).not.toContain("attendance:manage");
+    expect(me.capabilities).not.toContain("appointments:manage");
   });
 
   it("gives a receptionist the front-desk manage tokens but not the catalogue or record-delete ones", async () => {
@@ -88,6 +101,8 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
     // patient record -- the deliberate asymmetry against uploading one.
     expect([...me.capabilities].sort()).toEqual(
       ([
+        "appointments:manage",
+        "attendance:manage",
         "invoices:access",
         "packages:view",
         "patientPackages:manage",
@@ -98,6 +113,11 @@ describeIntegration("Current-user contract (GET /api/users/me)", () => {
     expect(me.capabilities).not.toContain("reports:view");
     expect(me.capabilities).not.toContain("packages:manage");
     expect(me.capabilities).not.toContain("patientRecords:delete");
+    // The other half of the crossing (D11): reception records attendance for
+    // other staff and never their own. `UX.md`'s Screen Inventory said
+    // otherwise and contradicted Flow 14; Flow 14 was the correct side.
+    expect(me.capabilities).not.toContain("attendance:record");
+    expect(me.capabilities).not.toContain("attendance:oversee");
   });
 
   it("grants a super admin the platform API explorer capability and no org capabilities", async () => {

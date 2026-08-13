@@ -74,10 +74,11 @@ Platform shell: user menu (My account, Change password, Log out). No primary nav
 /app/patients                Patients
   /app/patients/[id]         Patient Workspace    → tabs/split: overview, appointments, records, packages, invoices
                                                     hosts: edit patient, records upload, package assignment & usage
-/app/appointments            Appointments (oversight, Owner/Admin)  → drawer: appointment detail & status
+/app/appointments            Appointments (all roles, role-scoped)  → drawer: appointment detail & status
+                                                    dialog: schedule / edit appointment
   /app/appointments/[id]/consultation  Consultation  → inline: prescription
-                                                    reached from: dashboard appointments widget/dialog, patient workspace
-/app/attendance              Attendance (board)   → dialog: mark attendance / availability (status)
+                                                    reached from: appointments, patient workspace, dashboard widget/dialog
+/app/attendance              Attendance (all roles, role-scoped)    → dialog: mark attendance / availability (status)
 /app/invoices                Invoices (list)      → dialog: invoice detail (line items, payments); dialog: create invoice
 /app/packages                Packages             → dialog: create/edit, activate/deactivate
 /app/users                   Users                → drawer: user detail & compensation; dialog: create, change role, activate/deactivate, offboard
@@ -103,8 +104,8 @@ Items sit in three groups — **Clinical**, **Billing & Catalog**, and **Adminis
 | --- | --- | :---: | :---: | :---: | :---: |
 | Dashboard | — | ● | ● | ● | ● |
 | Patients | Clinical | ● | ● | ● | ● |
-| Appointments | Clinical | ● | ● | — | — |
-| Attendance | Clinical | ● | ● | — | — |
+| Appointments | Clinical | ● | ● | ● | ● |
+| Attendance | Clinical | ● | ● | ● | ● |
 | Invoices | Billing & Catalog | ● | ● | — | ● |
 | Packages | Billing & Catalog | ● | ● | ● | ● |
 | Reports | Administration | ● | ● | ●¹ | — |
@@ -116,7 +117,9 @@ Items sit in three groups — **Clinical**, **Billing & Catalog**, and **Adminis
 ¹ Physiotherapists see only their own physiotherapist report tab; billing and commission tabs are gated out.
 ² The Subscription tab within Settings is Owner-only; Admin sees the Organization tab only, and read-only there -- only Owner (and SUPER_ADMIN) may edit the organization profile (F4).
 
-Non-manager roles get a deliberately short nav: **Physio** — Dashboard, Patients, Packages, Reports; **Reception** — Dashboard, Patients, Invoices, Packages. Packages is view-only for both (catalog management is Owner/Admin). Their high-frequency work (a physio's day, reception's scheduling and billing) runs through the Dashboard widget/quick actions and the patient workspace, not extra nav items.
+Non-manager roles still get a shorter nav than the management tier: **Physio** — Dashboard, Patients, Appointments, Attendance, Packages, Reports; **Reception** — Dashboard, Patients, Appointments, Attendance, Invoices, Packages. Packages is view-only for both (catalog management is Owner/Admin). Appointments and Attendance are **ungated destinations whose contents are scoped per role by the service layer**, not per-role copies of a management page: a physio's appointment list is their own and their attendance board is their own record; reception's appointment list is their accessible clinics and their attendance board is the staff at those clinics. The org-wide framing within each — the physiotherapist filter, the cross-staff columns and user/clinic filters — stays gated on `appointments:oversee` / `attendance:oversee`.
+
+Amended in F6. The earlier version of this paragraph routed both roles' high-frequency work through "the Dashboard widget/quick actions and the patient workspace, not extra nav items". That left a physiotherapist with no route to mark their own attendance or availability — the central act of Flow 14 — and no appointment surface at all until the Dashboard is built in F8, a phase later. The two destinations are the fix.
 
 ### Primary navigation — platform console
 
@@ -300,6 +303,14 @@ The core journeys, one per goal. Each states its actor, entry trigger, the order
 - **Branches:** attendance already recorded for a person on a date is a conflict (per conventions); half-day requires an unavailable window to know which appointments to cancel.
 - **End states:** *Success* — attendance recorded; an unavailability marking leaves the physiotherapist's affected schedule cleared and blocked.
 
+**The half-day unavailable window is offered as two fixed choices, not free time inputs: `09:00–14:00` and `14:00–19:00`.** Pinned here so the picker and any future validation agree on them rather than each deciding freshly. Three things about the backend shape this control:
+
+- **The backend deliberately accepts any window.** It validates the format, that both bounds are present together, that `from` is before `to`, and that a window exists exactly when the status is `half_day` — but nothing constrains the *values*. The two-choice control is a client-side design decision, not an enforced constraint, per this document's standing model that the client gate is advisory and the server is the boundary.
+- **An update supplying a window without a status is silently discarded.** The server resolves it against the existing record and, if that record's status does not resolve to `half_day`, nulls the window rather than refusing it. This is an accepted behaviour recorded in `AGENTS.md`, deliberately not enforced server-side; the two-choice control designs it out at the point of entry, since a window can never be submitted without an accompanying `half_day` status.
+- **A stored window matching neither choice can exist** — written directly through the API, or backfilled by the availability migration at `09:00–13:00`. The control shows the stored window as it is and requires an explicit choice to change it; it never silently snaps a recorded window to one of the two.
+
+**What the actor is told afterwards.** An unavailability marking is not reported as a bare success. The response names every appointment it cancelled, every checked-in appointment it deliberately skipped (a patient already at the clinic is not something the system cancels on its own), and any cancellation or patient notification that failed. All four are surfaced — a marking that cleared six visits and failed two notifications is not honestly reported as "Attendance recorded".
+
 _SUPER_ADMIN's only V1 journey is Flow 1 landing into the API Explorer; there is no separate platform flow._
 
 ---
@@ -351,9 +362,9 @@ The scarce set of independent navigational destinations. List destinations host 
 | Dashboard | Role-aware landing with summary widgets and quick actions | All | `/app` | `dashboard` | F8 |
 | Patients | Browse patients; open a patient workspace | All | `/app/patients` | `patients` | F5 |
 | Patient Workspace | Focused workspace for one patient: overview, records, packages. Appointments (F6) and invoices (F7) add their own tabs when those phases build them | All | `/app/patients/[id]` | `patients` | F5 |
-| Appointments (oversight) | Owner/Admin oversight & audit of appointments across staff and clinics; filter and review by date range. Not an operational page — daily viewing lives in the dashboard widget | Owner, Admin | `/app/appointments` | `appointments` | F6 |
+| Appointments | The appointment schedule, scoped per role by the service layer: Owner/Admin see the organization, Physio their own, Reception their accessible clinics. Filter and review by date range, status, clinic and staff; hosts the detail drawer and the schedule/edit dialog | All | `/app/appointments` | `appointments` | F6 |
 | Consultation | Clinical workspace for an appointment; hosts prescriptions | Physio | `/app/appointments/[id]/consultation` | `consultations` | F6 |
-| Attendance | Review staff attendance; feeds compensation & commission | Owner, Admin | `/app/attendance` | `attendance` | F6 |
+| Attendance | Record and review staff attendance, and mark physiotherapist availability; feeds compensation & commission. Scoped per role: Owner/Admin org-wide, Reception their accessible clinics, everyone else their own record | All | `/app/attendance` | `attendance` | F6 |
 | Invoices | Browse invoices (list); Reception needs this operationally | Owner, Admin, Reception | `/app/invoices` | `invoices` | F7 |
 | Packages | Package catalog | All | `/app/packages` | `packages` | F5 |
 | Users | Browse org users | Owner, Admin | `/app/users` | `users` | F3 |
@@ -374,10 +385,10 @@ Hosted within a destination or the app shell, per the surface model.
 | Patient records | Tab + upload Dialog | Patient Workspace | View & upload: Owner, Admin, Reception (organization-wide); Physio (only patients they have an appointment with). Delete: Owner, Admin | `patients` | F5 |
 | Package assignment & session usage | Tab + assign Dialog | Patient Workspace | Owner, Admin, Reception | `patient-packages` | F5 |
 | Appointments — today / upcoming | Dashboard widget + "view all" dialog; inline quick status actions on each row | Dashboard | All | `appointments` | F6 |
-| Appointment detail & status workflow | Drawer (page-level) | Patient Workspace, Appointments (oversight) | All | `appointments` | F6 |
-| Schedule / Edit appointment | Dialog | Dashboard, Patient Workspace | All | `appointments` | F6 |
+| Appointment detail & status workflow | Drawer (page-level) | Patient Workspace, Appointments | All | `appointments` | F6 |
+| Schedule / Edit appointment | Dialog | Appointments, Patient Workspace | All | `appointments` | F6 |
 | Prescription | Inline section | Consultation | Physio | `prescriptions` | F6 |
-| Mark attendance | Dialog / quick action | Attendance, Dashboard | Physio (own), Owner/Admin | `attendance` | F6 |
+| Mark attendance | Dialog / quick action | Attendance | Physio (own), Reception (others), Owner/Admin (both) | `attendance` | F6 |
 | Create invoice | Dialog | Dashboard, Invoices, Patient Workspace | Owner, Admin, Reception | `invoices` | F7 |
 | Invoice detail — line items, record payment, status | Dialog | Invoices, Patient Workspace, Appointment detail | Owner, Admin, Reception | `payments` | F7 |
 | Create / Edit package · activate / deactivate | Dialog | Packages | Owner, Admin | `packages` | F5 |
@@ -390,9 +401,13 @@ Hosted within a destination or the app shell, per the surface model.
 
 **Attendance → availability:** a physiotherapist's attendance drives their bookable availability; see Flow 14.
 
-**Appointment check-in & detail:** appointments surface in several places — the dashboard widget, the "view all" dialog, the patient workspace appointments tab, and the Owner/Admin oversight page. Direction: quick status actions are **inline controls on each appointment row**, so the common check-in is a single action wherever the appointment appears — no Appointments page needed. On the patient workspace and oversight page, fuller detail and reschedule open the **appointment detail drawer** over that page.
+**Mark attendance — who records for whom (amended in F6).** The role cell above previously read "Physio (own), Owner/Admin", which **contradicted Flow 14 step 1** — "a user with the *attendance-management* capability records it for other staff" — since Reception holds that capability. This amendment resolves the contradiction in favour of Flow 14; it does not change the intended behaviour, which Flow 14 already described. Reading it the narrower way would have left Owner and Admin as the only people able to record anyone else's attendance, when the front desk is who actually does this, and would have left a receptionist's own attendance with no possible author at all.
 
-**Open — dashboard widget detail:** how the dashboard appointments widget exposes *fuller* detail (reschedule, cancel, full view) is **not finalized**. Opening the shared detail drawer over the dashboard is one option but is not yet settled; an alternative approach is to be worked out and will likely take a few iterations. To be resolved during F6 implementation. Constraint to respect either way: do not stack a drawer over the "view all" dialog.
+The two capabilities **cross rather than nest**, so the dialog gates them as two independent affordances and never derives one from the other: a physiotherapist may record their own attendance and not another's; a receptionist may record another's and not their own; Owner and Admin hold both. Recording for another person is clinic-then-user — the picker is scoped to a chosen clinic's assigned staff, mirroring the rule the server enforces.
+
+**Appointment check-in & detail:** appointments surface in several places — the Appointments destination, the patient workspace appointments tab, and (from F8) the dashboard widget and its "view all" dialog. Direction: quick status actions are **inline controls on each appointment row**, so the common check-in is a single action wherever the appointment appears. On the appointments destination and the patient workspace, fuller detail and reschedule open the **appointment detail drawer** over that page. Which actions a row offers is not decided client-side: the appointment read response carries the transitions this caller may actually perform on that row, and the controls are rendered from it.
+
+**Open — dashboard widget detail:** how the dashboard appointments widget exposes *fuller* detail (reschedule, cancel, full view) is **not finalized**. Opening the shared detail drawer over the dashboard is one option but is not yet settled; an alternative approach is to be worked out and will likely take a few iterations. **To be resolved during F8 implementation** — reassigned from F6, which builds the widget component but mounts nothing on the Dashboard, so it cannot settle the question by use. Constraint to respect either way: do not stack a drawer over the "view all" dialog.
 
 **Change-password dialog (reusable):** the change-password dialog is a reusable surface owned by the `auth` feature, decoupled from My Account so it can be invoked from several triggers with the same content:
 

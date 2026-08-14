@@ -1,21 +1,50 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import type { Database, Json } from "@/types/database";
+import type { InvoiceItemPayload } from "./invoice-item.repository";
 
 export type Invoice = Database["public"]["Tables"]["invoices"]["Row"];
 export type InsertInvoice = Database["public"]["Tables"]["invoices"]["Insert"];
 export type UpdateInvoice = Database["public"]["Tables"]["invoices"]["Update"];
 
 /**
- * Inserts a new invoice record.
+ * Atomically inserts an invoice together with its line items via the
+ * create_invoice_with_items database function (see AGENTS.md "Database
+ * Functions for Atomic Operations").
  */
-export async function insertInvoice(
+export async function createInvoiceWithItems(
   supabase: SupabaseClient<Database>,
-  invoice: InsertInvoice
+  params: {
+    organizationId: string;
+    invoiceNumber: string;
+    patientId: string;
+    clinicId: string;
+    appointmentId?: string;
+    patientPackageId?: string;
+    invoiceDate?: string;
+    subtotal: number;
+    gstAmount: number;
+    discountAmount: number;
+    totalAmount: number;
+    createdBy: string;
+    items: InvoiceItemPayload[];
+  }
 ): Promise<Invoice> {
   const { data, error } = await supabase
-    .from("invoices")
-    .insert(invoice)
-    .select()
+    .rpc("create_invoice_with_items", {
+      p_organization_id: params.organizationId,
+      p_invoice_number: params.invoiceNumber,
+      p_patient_id: params.patientId,
+      p_clinic_id: params.clinicId,
+      p_appointment_id: params.appointmentId,
+      p_patient_package_id: params.patientPackageId,
+      p_invoice_date: params.invoiceDate,
+      p_subtotal: params.subtotal,
+      p_gst_amount: params.gstAmount,
+      p_discount_amount: params.discountAmount,
+      p_total_amount: params.totalAmount,
+      p_created_by: params.createdBy,
+      p_items: params.items as unknown as Json,
+    })
     .single();
 
   if (error) {
@@ -43,21 +72,6 @@ export async function updateInvoice(
     throw error;
   }
   return data;
-}
-
-/**
- * Deletes an invoice record. Used to compensate a failed invoice_items
- * insert immediately after invoice creation.
- */
-export async function deleteInvoice(
-  supabase: SupabaseClient<Database>,
-  invoiceId: string
-): Promise<void> {
-  const { error } = await supabase.from("invoices").delete().eq("id", invoiceId);
-
-  if (error) {
-    throw error;
-  }
 }
 
 /**

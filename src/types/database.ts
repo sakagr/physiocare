@@ -1593,9 +1593,86 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_invoice_with_items: {
+        Args: {
+          p_appointment_id?: string
+          p_clinic_id: string
+          p_created_by?: string
+          p_discount_amount: number
+          p_gst_amount: number
+          p_invoice_date?: string
+          p_invoice_number: string
+          p_items: Json
+          p_organization_id: string
+          p_patient_id: string
+          p_patient_package_id?: string
+          p_subtotal: number
+          p_total_amount: number
+        }
+        Returns: {
+          appointment_id: string | null
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          discount_amount: number
+          gst_amount: number
+          id: string
+          invoice_date: string
+          invoice_number: string
+          organization_id: string
+          patient_id: string
+          patient_package_id: string | null
+          subtotal: number
+          total_amount: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       current_organization_id: { Args: never; Returns: string }
       current_user_role: { Args: never; Returns: string }
       is_super_admin: { Args: never; Returns: boolean }
+      replace_invoice_items: {
+        Args: {
+          p_discount_amount: number
+          p_gst_amount: number
+          p_invoice_date?: string
+          p_invoice_id: string
+          p_items: Json
+          p_organization_id: string
+          p_subtotal: number
+          p_total_amount: number
+        }
+        Returns: {
+          appointment_id: string | null
+          clinic_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          discount_amount: number
+          gst_amount: number
+          id: string
+          invoice_date: string
+          invoice_number: string
+          organization_id: string
+          patient_id: string
+          patient_package_id: string | null
+          subtotal: number
+          total_amount: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reverse_package_session_usage: {
         Args: { p_appointment_id: string; p_organization_id: string }
         Returns: {

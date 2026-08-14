@@ -18,8 +18,12 @@ describeIntegration("Audit log capture", () => {
     const clinic = await createClinic(ctx.admin, owner.id, validClinicInput(`${ctx.runId}-one`));
 
     const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-one`));
-    const { invoice } = await createInvoice(ctx.admin, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
-    await createPayment(ctx.admin, owner.id, validPaymentInput(invoice.id));
+    // Billing writes run through a real session client: recordAuditLogSafe
+    // swallows its own failures, so an entry asserted only behind the service
+    // role would keep passing after auditing had silently stopped.
+    const ownerClient = await ctx.signedInClient(owner.email);
+    const { invoice } = await createInvoice(ownerClient, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
+    const payment = await createPayment(ownerClient, owner.id, validPaymentInput(invoice.id));
     const pkg = await createPackage(ctx.admin, owner.id, validPackageInput(`${ctx.runId}-one`));
     await deletePackage(ctx.admin, owner.id, pkg.id);
 
@@ -35,6 +39,12 @@ describeIntegration("Audit log capture", () => {
 
     const packageEntry = logs.items.find((entry) => entry.entity_name === "packages" && entry.entity_id === pkg.id);
     expect(packageEntry).toMatchObject({ action: "delete" });
+
+    const invoiceEntry = logs.items.find((entry) => entry.entity_name === "invoices" && entry.entity_id === invoice.id);
+    expect(invoiceEntry).toMatchObject({ action: "create", user_id: owner.id });
+
+    const paymentEntry = logs.items.find((entry) => entry.entity_name === "payments" && entry.entity_id === payment.id);
+    expect(paymentEntry).toMatchObject({ action: "create", user_id: owner.id });
   });
 
   it("restricts audit log visibility to ORG_OWNER/ORG_ADMIN", async () => {

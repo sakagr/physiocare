@@ -2,18 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { Invoice } from "../repositories/invoice.repository";
 import {
-  insertInvoice,
+  createInvoiceWithItems,
   updateInvoice as persistInvoiceUpdate,
-  deleteInvoice as removeInvoice,
   findInvoiceById,
   findLatestInvoiceNumberInOrg,
   listInvoices,
   countInvoices,
 } from "../repositories/invoice.repository";
 import {
-  insertInvoiceItems,
   listInvoiceItemsByInvoice,
-  deleteInvoiceItemsByInvoice,
+  replaceInvoiceItems,
   type InvoiceItem,
 } from "../repositories/invoice-item.repository";
 import { findUserById, findRoleById } from "../repositories/user.repository";
@@ -30,7 +28,7 @@ import {
   getAccessibleClinicIds,
   assertOrganizationCanTransact,
 } from "./authorization.service";
-import { recordAuditLog } from "./audit-log.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreateInvoiceInput, UpdateInvoiceInput } from "../validators/invoice.validator";
@@ -120,19 +118,26 @@ export async function createInvoice(
     const invoiceNumber = await generateInvoiceNumber(supabase, caller.organization_id);
     let invoice: Invoice;
     try {
-      invoice = await insertInvoice(supabase, {
-        organization_id: caller.organization_id,
-        invoice_number: invoiceNumber,
-        patient_id: input.patientId,
-        clinic_id: input.clinicId,
-        appointment_id: input.appointmentId ?? null,
-        patient_package_id: input.patientPackageId ?? null,
-        invoice_date: input.invoiceDate,
+      invoice = await createInvoiceWithItems(supabase, {
+        organizationId: caller.organization_id,
+        invoiceNumber,
+        patientId: input.patientId,
+        clinicId: input.clinicId,
+        appointmentId: input.appointmentId,
+        patientPackageId: input.patientPackageId,
+        invoiceDate: input.invoiceDate,
         subtotal,
-        gst_amount: gstAmount,
-        discount_amount: input.discountAmount,
-        total_amount: totalAmount,
-        created_by: callerUserId,
+        gstAmount,
+        discountAmount: input.discountAmount,
+        totalAmount,
+        createdBy: callerUserId,
+        items: input.items.map((item) => ({
+          item_name: item.itemName,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          gst_percent: item.gstPercent,
+          total: item.quantity * item.unitPrice * (1 + item.gstPercent / 100),
+        })),
       });
     } catch (error) {
       if (!isUniqueViolation(error) || attempt === MAX_INVOICE_NUMBER_ATTEMPTS - 1) {
@@ -141,36 +146,17 @@ export async function createInvoice(
       continue;
     }
 
-    try {
-      const items = await insertInvoiceItems(
-        supabase,
-        input.items.map((item) => ({
-          organization_id: caller.organization_id!,
-          invoice_id: invoice.id,
-          item_name: item.itemName,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          gst_percent: item.gstPercent,
-          total: item.quantity * item.unitPrice * (1 + item.gstPercent / 100),
-        }))
-      );
-      await recordAuditLog(supabase, {
-        organizationId: invoice.organization_id,
-        userId: callerUserId,
-        action: "create",
-        entityName: "invoices",
-        entityId: invoice.id,
-        newData: invoice,
-      });
-      return { invoice, items };
-    } catch (error) {
-      try {
-        await removeInvoice(supabase, invoice.id);
-      } catch {
-        // TODO: Introduce centralized monitoring/alerting for compensation failures.
-      }
-      throw error;
-    }
+    await recordAuditLogSafe(supabase, {
+      organizationId: invoice.organization_id,
+      userId: callerUserId,
+      action: "create",
+      entityName: "invoices",
+      entityId: invoice.id,
+      newData: invoice,
+    });
+
+    const items = await listInvoiceItemsByInvoice(supabase, invoice.id);
+    return { invoice, items };
   }
 
   throw new Error("Failed to generate a unique invoice number");
@@ -218,26 +204,21 @@ export async function updateInvoice(
   if (input.items) {
     const { subtotal, gstAmount, totalAmount } = computeTotals(input.items as CreateInvoiceInput["items"], discountAmount);
 
-    await deleteInvoiceItemsByInvoice(supabase, invoiceId);
-    await insertInvoiceItems(
-      supabase,
-      input.items.map((item) => ({
-        organization_id: caller.organization_id!,
-        invoice_id: invoiceId,
+    updatedInvoice = await replaceInvoiceItems(supabase, {
+      organizationId: caller.organization_id,
+      invoiceId,
+      items: input.items.map((item) => ({
         item_name: item!.itemName,
         quantity: item!.quantity,
         unit_price: item!.unitPrice,
         gst_percent: item!.gstPercent ?? 0,
         total: item!.quantity * item!.unitPrice * (1 + (item!.gstPercent ?? 0) / 100),
-      }))
-    );
-
-    updatedInvoice = await persistInvoiceUpdate(supabase, invoiceId, {
+      })),
       subtotal,
-      gst_amount: gstAmount,
-      discount_amount: discountAmount,
-      total_amount: totalAmount,
-      invoice_date: input.invoiceDate,
+      gstAmount,
+      discountAmount,
+      totalAmount,
+      invoiceDate: input.invoiceDate,
     });
   } else if (input.discountAmount !== undefined || input.invoiceDate !== undefined) {
     const items = await listInvoiceItemsByInvoice(supabase, invoiceId);
@@ -252,6 +233,16 @@ export async function updateInvoice(
       invoice_date: input.invoiceDate,
     });
   }
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: invoice.organization_id,
+    userId: callerUserId,
+    action: "update",
+    entityName: "invoices",
+    entityId: invoice.id,
+    oldData: invoice,
+    newData: updatedInvoice,
+  });
 
   const items = await listInvoiceItemsByInvoice(supabase, invoiceId);
   return { invoice: updatedInvoice, items };
@@ -288,7 +279,18 @@ export async function deleteInvoice(
     throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
   }
 
-  return persistInvoiceUpdate(supabase, invoiceId, { deleted_at: new Date().toISOString() });
+  const cancelled = await persistInvoiceUpdate(supabase, invoiceId, { deleted_at: new Date().toISOString() });
+
+  await recordAuditLogSafe(supabase, {
+    organizationId: invoice.organization_id,
+    userId: callerUserId,
+    action: "cancel",
+    entityName: "invoices",
+    entityId: invoice.id,
+    oldData: invoice,
+  });
+
+  return cancelled;
 }
 
 /**

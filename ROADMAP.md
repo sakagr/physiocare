@@ -236,6 +236,8 @@ Day-to-day clinic.
 
 ---
 
+*Prerequisite: Billing Write Correctness (backend correctness fix, see `AGENTS.md` → Project Decisions).*
+
 # Phase F7 – Billing
 
 Invoicing and payments.
@@ -295,8 +297,8 @@ Operational readiness.
 - Setup Production Environment
 - Retrofit audit logging to the features still uncovered (see `AGENTS.md` → *Audit Logging*). F5 and F6 each covered their own surface area, so what remains is:
   - **Add coverage where none exists** — `user.service.ts`, `clinic.service.ts`, `user-clinic.service.ts`, `notification.service.ts`.
-  - **Migrate the throwing call sites** in `invoice.service.ts`, `payment.service.ts`, `organization.service.ts` and `subscription.service.ts` from `recordAuditLog` onto `recordAuditLogSafe`, so a failed audit can no longer fail the operation it records.
-  - *No longer owed:* appointments (create/update/every status transition/delete/auto-cancel), consultations, prescriptions, and attendance (record/correct/check-out) — covered by F6 and the availability phase.
+  - **Migrate the throwing call sites** in `organization.service.ts` and `subscription.service.ts` from `recordAuditLog` onto `recordAuditLogSafe`, so a failed audit can no longer fail the operation it records.
+  - *No longer owed:* appointments (create/update/every status transition/delete/auto-cancel), consultations, prescriptions, and attendance (record/correct/check-out) — covered by F6 and the availability phase. Also `invoice.service.ts` and `payment.service.ts`, whose migration Billing Write Correctness pulled forward: for those two services against a receptionist's session the throw was not a hypothetical failed audit but a guaranteed one on every write, so it was a blocker rather than hardening.
 - Work the soft-delete exemption list down to its legitimate entries — the ten `PENDING_R9` reads in `tests/unit/soft-delete-liveness.test.ts` each need a judgment: add the filter, or record why the read needs deleted rows
 
 ---

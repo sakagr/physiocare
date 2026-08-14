@@ -15,18 +15,19 @@ describeIntegration("Invoice lifecycle", () => {
     const owner = await ctx.createUser(organization.id, "ORG_OWNER", "owner");
     const clinic = await createClinic(ctx.admin, owner.id, validClinicInput(`${ctx.runId}-one`));
     const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-one`));
+    const ownerClient = await ctx.signedInClient(owner.email);
 
-    const { invoice, items } = await createInvoice(ctx.admin, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
+    const { invoice, items } = await createInvoice(ownerClient, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
     expect(invoice.invoice_number).toMatch(/^INV-\d{6}$/);
     expect(invoice.subtotal).toBe(500);
     expect(invoice.gst_amount).toBe(90);
     expect(invoice.total_amount).toBe(590);
     expect(items).toHaveLength(1);
 
-    const { invoice: updated } = await updateInvoice(ctx.admin, owner.id, invoice.id, { discountAmount: 90 });
+    const { invoice: updated } = await updateInvoice(ownerClient, owner.id, invoice.id, { discountAmount: 90 });
     expect(updated.total_amount).toBe(500);
 
-    const second = await createInvoice(ctx.admin, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
+    const second = await createInvoice(ownerClient, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
     const firstSequence = parseInt(invoice.invoice_number.slice(4), 10);
     const secondSequence = parseInt(second.invoice.invoice_number.slice(4), 10);
     expect(secondSequence).toBe(firstSequence + 1);
@@ -37,17 +38,18 @@ describeIntegration("Invoice lifecycle", () => {
     const owner = await ctx.createUser(organization.id, "ORG_OWNER", "paid-owner");
     const clinic = await createClinic(ctx.admin, owner.id, validClinicInput(`${ctx.runId}-paid`));
     const patient = await createPatient(ctx.admin, owner.id, validPatientInput(`${ctx.runId}-paid`));
-    const { invoice } = await createInvoice(ctx.admin, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
+    const ownerClient = await ctx.signedInClient(owner.email);
+    const { invoice } = await createInvoice(ownerClient, owner.id, validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }));
 
-    await createPayment(ctx.admin, owner.id, validPaymentInput(invoice.id));
+    await createPayment(ownerClient, owner.id, validPaymentInput(invoice.id));
 
-    await expect(updateInvoice(ctx.admin, owner.id, invoice.id, { discountAmount: 10 })).rejects.toMatchObject({ code: ErrorCodes.INVOICE_ALREADY_FINALIZED });
+    await expect(updateInvoice(ownerClient, owner.id, invoice.id, { discountAmount: 10 })).rejects.toMatchObject({ code: ErrorCodes.INVOICE_ALREADY_FINALIZED });
 
-    const cancelled = await deleteInvoice(ctx.admin, owner.id, invoice.id);
+    const cancelled = await deleteInvoice(ownerClient, owner.id, invoice.id);
     expect(cancelled.deleted_at).not.toBeNull();
     // canAccessInvoice resolves the invoice by ID to authorize, so a soft-deleted
     // (no-longer-findable) invoice surfaces as FORBIDDEN, not NOT_FOUND -- the same
     // shape as canAccessAppointment/canAccessConsultation/canAccessPrescription.
-    await expect(getInvoiceDetails(ctx.admin, owner.id, invoice.id)).rejects.toMatchObject({ code: ErrorCodes.FORBIDDEN });
+    await expect(getInvoiceDetails(ownerClient, owner.id, invoice.id)).rejects.toMatchObject({ code: ErrorCodes.FORBIDDEN });
   });
 });

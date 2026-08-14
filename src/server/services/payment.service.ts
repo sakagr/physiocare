@@ -6,12 +6,19 @@ import {
   updatePayment as persistPaymentUpdate,
   findPaymentById,
   existsPaymentForInvoice,
+  listPaymentsByInvoice,
   listPaymentsByPatient,
 } from "../repositories/payment.repository";
 import { findUserById } from "../repositories/user.repository";
 import { findInvoiceById } from "../repositories/invoice.repository";
-import { canManagePayments, canUpdatePaymentStatus, canAccessPayment, assertOrganizationCanTransact } from "./authorization.service";
-import { recordAuditLog } from "./audit-log.service";
+import {
+  canManagePayments,
+  canUpdatePaymentStatus,
+  canAccessPayment,
+  canAccessInvoice,
+  assertOrganizationCanTransact,
+} from "./authorization.service";
+import { recordAuditLogSafe } from "./audit-log.service";
 import { AppError, ErrorCodes } from "../errors";
 import type { PagedResult } from "../validators/shared.validator";
 import type { CreatePaymentInput } from "../validators/payment.validator";
@@ -23,6 +30,16 @@ const LEGAL_STATUS_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
   completed: ["refunded", "cancelled"],
   refunded: [],
   cancelled: [],
+};
+
+/**
+ * A status transition is a lifecycle event, so it audits under a domain verb
+ * naming the target status rather than a generic "update".
+ */
+const STATUS_AUDIT_ACTIONS: Record<PaymentStatus, string> = {
+  completed: "complete",
+  refunded: "refund",
+  cancelled: "cancel",
 };
 
 /**
@@ -71,7 +88,7 @@ export async function createPayment(
     payment_status: "completed",
   });
 
-  await recordAuditLog(supabase, {
+  await recordAuditLogSafe(supabase, {
     organizationId: invoice.organization_id,
     userId: callerUserId,
     action: "create",
@@ -125,10 +142,10 @@ export async function updatePaymentStatus(
   const previousStatus = payment.payment_status;
   const updated = await persistPaymentUpdate(supabase, paymentId, { payment_status: status });
 
-  await recordAuditLog(supabase, {
+  await recordAuditLogSafe(supabase, {
     organizationId: payment.organization_id,
     userId: callerUserId,
-    action: "update",
+    action: STATUS_AUDIT_ACTIONS[status],
     entityName: "payments",
     entityId: payment.id,
     oldData: { payment_status: previousStatus },
@@ -167,30 +184,12 @@ export async function listPaymentsForInvoice(
   callerUserId: string,
   invoiceId: string
 ): Promise<Payment[]> {
-  const caller = await findUserById(supabase, callerUserId);
-  if (!caller) {
-    throw new Error("Caller not found");
+  const isAuthorized = await canAccessInvoice(supabase, callerUserId, invoiceId);
+  if (!isAuthorized) {
+    throw new AppError("Forbidden: Insufficient privileges", ErrorCodes.FORBIDDEN);
   }
 
-  const invoice = await findInvoiceById(supabase, invoiceId);
-  if (!invoice) {
-    throw new AppError("Invoice not found", ErrorCodes.NOT_FOUND);
-  }
-
-  if (caller.organization_id && caller.organization_id !== invoice.organization_id) {
-    throw new AppError("Forbidden: Scoping violation", ErrorCodes.FORBIDDEN);
-  }
-
-  const { data, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("invoice_id", invoiceId)
-    .is("deleted_at", null);
-
-  if (error) {
-    throw error;
-  }
-  return data;
+  return listPaymentsByInvoice(supabase, invoiceId);
 }
 
 /**

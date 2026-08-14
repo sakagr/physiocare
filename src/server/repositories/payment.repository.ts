@@ -87,6 +87,25 @@ export async function findPaymentByInvoiceId(
 }
 
 /**
+ * Lists the active payments recorded against an invoice.
+ */
+export async function listPaymentsByInvoice(
+  supabase: SupabaseClient<Database>,
+  invoiceId: string
+): Promise<Payment[]> {
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("invoice_id", invoiceId)
+    .is("deleted_at", null);
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
  * Checks whether an active payment already exists for an invoice.
  */
 export async function existsPaymentForInvoice(

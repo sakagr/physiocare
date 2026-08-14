@@ -5,11 +5,15 @@ import { createAppointment } from "@/server/services/appointment.service";
 import { createConsultation } from "@/server/services/consultation.service";
 import { createPrescription } from "@/server/services/prescription.service";
 import { createPatientRecord } from "@/server/services/patient-record.service";
+import { createInvoice } from "@/server/services/invoice.service";
+import { createPayment } from "@/server/services/payment.service";
 import {
   validAppointmentInput,
   validClinicInput,
   validConsultationInput,
+  validInvoiceInput,
   validPatientInput,
+  validPaymentInput,
   validPrescriptionInput,
 } from "../helpers/factories";
 import { describeIntegration, setupIntegrationContext } from "../helpers/integration-context";
@@ -38,10 +42,30 @@ describeIntegration("Clinical RLS and tenant isolation", () => {
       fileName: "n.pdf",
       mimeType: "application/pdf",
     });
-    return { organization, owner, clinic, physio, patient, appointment, consultation, prescription, record };
+    // The invoice is linked to the appointment so the physiotherapist branch
+    // of invoices_select_policy is exercised, not merely present.
+    const { invoice, items } = await createInvoice(ctx.admin, owner.id, {
+      ...validInvoiceInput({ patientId: patient.id, clinicId: clinic.id }),
+      appointmentId: appointment.id,
+    });
+    const payment = await createPayment(ctx.admin, owner.id, validPaymentInput(invoice.id));
+    return {
+      organization,
+      owner,
+      clinic,
+      physio,
+      patient,
+      appointment,
+      consultation,
+      prescription,
+      record,
+      invoice,
+      invoiceItem: items[0],
+      payment,
+    };
   }
 
-  it("isolates patients, appointments, consultations, prescriptions, and patient records across organizations", async () => {
+  it("isolates patients, appointments, consultations, prescriptions, patient records, invoices, invoice items, and payments across organizations", async () => {
     const orgA = await setupFullOrg("iso-a");
     const orgB = await setupFullOrg("iso-b");
     const clientA = await ctx.signedInClient(orgA.owner.email);
@@ -71,6 +95,21 @@ describeIntegration("Clinical RLS and tenant isolation", () => {
     expect((records ?? []).map((r) => r.id)).toContain(orgA.record.id);
     expect((records ?? []).map((r) => r.id)).not.toContain(orgB.record.id);
 
+    const { data: invoices, error: invoicesError } = await clientA.from("invoices").select("id");
+    expect(invoicesError).toBeNull();
+    expect((invoices ?? []).map((i) => i.id)).toContain(orgA.invoice.id);
+    expect((invoices ?? []).map((i) => i.id)).not.toContain(orgB.invoice.id);
+
+    const { data: invoiceItems, error: invoiceItemsError } = await clientA.from("invoice_items").select("id");
+    expect(invoiceItemsError).toBeNull();
+    expect((invoiceItems ?? []).map((i) => i.id)).toContain(orgA.invoiceItem.id);
+    expect((invoiceItems ?? []).map((i) => i.id)).not.toContain(orgB.invoiceItem.id);
+
+    const { data: payments, error: paymentsError } = await clientA.from("payments").select("id");
+    expect(paymentsError).toBeNull();
+    expect((payments ?? []).map((p) => p.id)).toContain(orgA.payment.id);
+    expect((payments ?? []).map((p) => p.id)).not.toContain(orgB.payment.id);
+
     const { data: crossOrgUpdate, error: crossOrgUpdateError } = await clientA
       .from("patients")
       .update({ full_name: "Forbidden" })
@@ -80,7 +119,7 @@ describeIntegration("Clinical RLS and tenant isolation", () => {
     expect(crossOrgUpdate).toEqual([]);
   });
 
-  it("scopes appointments, consultations, and prescriptions to accessible clinics/own records at the Postgres level, while patients remain org-wide visible", async () => {
+  it("scopes appointments, consultations, prescriptions, and billing to accessible clinics/own records at the Postgres level, while patients remain org-wide visible", async () => {
     const organization = await ctx.createOrganization(`${ctx.runId}-scope-org`);
     const owner = await ctx.createUser(organization.id, "ORG_OWNER", "rls-owner");
     const clinicOne = await createClinic(ctx.admin, owner.id, validClinicInput(`${ctx.runId}-rls-one`));
@@ -111,6 +150,17 @@ describeIntegration("Clinical RLS and tenant isolation", () => {
     // below to prove it is filtered out rather than simply absent.
     await createPrescription(ctx.admin, physioTwo.id, validPrescriptionInput(consultationTwo.id));
 
+    const invoiceOne = await createInvoice(ctx.admin, owner.id, {
+      ...validInvoiceInput({ patientId: patientOne.id, clinicId: clinicOne.id }),
+      appointmentId: appointmentOne.id,
+    });
+    const invoiceTwo = await createInvoice(ctx.admin, owner.id, {
+      ...validInvoiceInput({ patientId: patientTwo.id, clinicId: clinicTwo.id }),
+      appointmentId: appointmentTwo.id,
+    });
+    const paymentOne = await createPayment(ctx.admin, owner.id, validPaymentInput(invoiceOne.invoice.id));
+    const paymentTwo = await createPayment(ctx.admin, owner.id, validPaymentInput(invoiceTwo.invoice.id));
+
     const physioOneClient = await ctx.signedInClient(physioOne.email);
     const { data: physioAppointments } = await physioOneClient.from("appointments").select("id");
     expect((physioAppointments ?? []).map((a) => a.id)).toEqual([appointmentOne.id]);
@@ -118,12 +168,33 @@ describeIntegration("Clinical RLS and tenant isolation", () => {
     expect((physioConsultations ?? []).map((c) => c.id)).toEqual([consultationOne.id]);
     const { data: physioPrescriptions } = await physioOneClient.from("prescriptions").select("id");
     expect((physioPrescriptions ?? []).map((p) => p.id)).toEqual([prescriptionOne.id]);
+    const { data: physioInvoices } = await physioOneClient.from("invoices").select("id");
+    expect((physioInvoices ?? []).map((i) => i.id)).toEqual([invoiceOne.invoice.id]);
+    const { data: physioInvoiceItems } = await physioOneClient.from("invoice_items").select("id");
+    expect((physioInvoiceItems ?? []).map((i) => i.id)).toEqual([invoiceOne.items[0].id]);
+    const { data: physioPayments } = await physioOneClient.from("payments").select("id");
+    expect((physioPayments ?? []).map((p) => p.id)).toEqual([paymentOne.id]);
 
     const receptionistClient = await ctx.signedInClient(receptionist.email);
     const { data: receptionistAppointments } = await receptionistClient.from("appointments").select("id");
     const receptionistAppointmentIds = (receptionistAppointments ?? []).map((a) => a.id);
     expect(receptionistAppointmentIds).toContain(appointmentOne.id);
     expect(receptionistAppointmentIds).not.toContain(appointmentTwo.id);
+
+    const { data: receptionistInvoices } = await receptionistClient.from("invoices").select("id");
+    const receptionistInvoiceIds = (receptionistInvoices ?? []).map((i) => i.id);
+    expect(receptionistInvoiceIds).toContain(invoiceOne.invoice.id);
+    expect(receptionistInvoiceIds).not.toContain(invoiceTwo.invoice.id);
+
+    const { data: receptionistInvoiceItems } = await receptionistClient.from("invoice_items").select("id");
+    const receptionistInvoiceItemIds = (receptionistInvoiceItems ?? []).map((i) => i.id);
+    expect(receptionistInvoiceItemIds).toContain(invoiceOne.items[0].id);
+    expect(receptionistInvoiceItemIds).not.toContain(invoiceTwo.items[0].id);
+
+    const { data: receptionistPayments } = await receptionistClient.from("payments").select("id");
+    const receptionistPaymentIds = (receptionistPayments ?? []).map((p) => p.id);
+    expect(receptionistPaymentIds).toContain(paymentOne.id);
+    expect(receptionistPaymentIds).not.toContain(paymentTwo.id);
 
     const { data: receptionistPatients } = await receptionistClient.from("patients").select("id");
     const receptionistPatientIds = (receptionistPatients ?? []).map((p) => p.id);

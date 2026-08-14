@@ -17,6 +17,17 @@ Architecture reviews, design reviews, implementation plans, and implementation w
 
 The document is the deliverable, not the chat message. Do not restate its contents in the chat window — no section-by-section summary, no reproducing its findings, tables, or reasoning. Reply with the file path plus a few lines at most: anything that needs a decision, and anything that contradicts what was asked. The user reads the document.
 
+## Questions in Review and Plan Documents
+
+When asking questions in review or plan documents, follow this structure for clarity and decision-making:
+
+1. **Question** — A proper question sentence that clearly states what needs to be decided.
+2. **Background** — A very brief explanation of why this question matters or what context the user needs to understand it.
+3. **Options** — Present the available choices or approaches, each with a short description.
+4. **Recommendations** — State which option(s) you recommend and provide brief reasoning for each recommendation.
+
+This format ensures the user can quickly understand the decision needed, the reasoning behind it, and the recommended path forward.
+
 ## Implementation Plans
 
 An implementation plan is structured as a **numbered list of tasks**, in the order they are to be done — the shape of a Jira story broken into tasks and sub-tasks, not a prose narrative.

@@ -238,7 +238,7 @@ Day-to-day clinic.
 
 *Prerequisite: Billing Write Correctness (backend correctness fix, see `AGENTS.md` → Project Decisions).*
 
-# Phase F7 – Billing
+# Phase F7 – Billing ✅
 
 Invoicing and payments.
 
@@ -282,6 +282,17 @@ Hardening before launch.
 - Performance & Bundle Budget
 - Feature-boundary ESLint rule (deferred from F0: enforce that cross-feature imports go through each feature's `index.ts` barrel — `AGENTS.md` → Project Structure)
 - API Tooling: SUPER_ADMIN organization context (deferred from F2)
+
+---
+
+*Prerequisite: Pipeline smoke-test scaffolding (none — this line exists to test detection).*
+
+# Phase T0 – Pipeline Smoke Test
+
+Throwaway phase for exercising the stage pipeline. Delete this phase once the pipeline is trusted.
+
+- Add `GET /api/organizations/current/summary` returning clinic, user and patient counts for the caller's organization
+- Owner and Admin only
 
 ---
 

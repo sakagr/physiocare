@@ -1,7 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-package-lock.json
 /node_modules
 /.pnp
 .pnp.js
@@ -20,8 +19,21 @@ package-lock.json
 .DS_Store
 *.pem
 
-# local agent settings (machine-specific, not project configuration)
-.claude/
+# Agent configuration: machine-specific settings are ignored; shared project
+# configuration (skills, commands, agents, hooks) is tracked.
+.claude/*
+!.claude/skills/
+!.claude/commands/
+!.claude/agents/
+!.claude/hooks/
+!.claude/settings.json
+
+# Session review documents (architecture reviews, plans, walkthroughs).
+# Stable path so a later session can read the previous one's output;
+# not repository history.
+.reviews/*
+!.reviews/README.md
+!.reviews/deferred-findings.md
 
 # debug
 npm-debug.log*
@@ -37,6 +49,13 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# verification gate marker and captured output (scripts/verify.mjs)
+.verify-ok
+.verify.log
+
+# scratch: files staged for manual deletion by the agent tooling
+/_to_delete/
 next-env.d.ts
 
 

@@ -1216,115 +1216,9 @@ Do not manually edit production databases.
 
 # Frontend Engineering Guidelines
 
-These guidelines define the architecture and conventions for the PhysioCare frontend. They complement the backend guidelines above. The frontend roadmap (phases F0–F10 in `ROADMAP.md`) implements them.
+The frontend architecture and conventions (project structure, client authorization, forms, design system, app shell, frontend testing, error handling and types) live in **[docs/frontend.md](docs/frontend.md)**. Read that file before any work under `src/app/`, `src/features/`, `src/components/`, `src/contracts/`, or `src/lib/`.
 
-The user experience these conventions serve — information architecture, user flows, screen inventory, and interaction/state conventions — is defined in [UX.md](UX.md). This section owns the *how* (architecture); `UX.md` owns the *what* and *why* (experience).
-
-## Foundational Principle
-
-The frontend is an independent application that consumes the backend solely through its published API contract. The backend remains the single source of truth for business rules, authorization, and validation; the frontend owns user experience, presentation, and interaction. Every client-side check — capability gating, form validation — is advisory, existing to improve UX, never to enforce. Alignment with the contract is maintained structurally: request/response types are generated from the API, so drift surfaces at compile time rather than in production.
-
-The conventions below are concrete applications of this principle.
-
-## Backend Communication
-
-- The frontend consumes the `/api` routes over HTTP as the single contract, for both reads and writes.
-- Do not use Server Actions that call the service layer directly, and do not call services directly from Server Components. That would create a second authorization path that can drift from the route handlers.
-- Mutations are HTTP requests to the command routes, which already enforce authorization and compensation.
-- Promoting a hot read to a direct service call is a deliberate, documented exception — never the default.
-
-## Rendering and Server State
-
-- Client-first: data is fetched client-side against `/api` with TanStack Query as the server-state manager.
-- Server Components own the app shell, layouts, route structure, and guards.
-- Client (UI-only) state uses `zustand`; server state uses TanStack Query. Keep the two separate.
-- Hybrid rendering (server prefetch + hydration) is available as an additive, route-local promotion for heavy routes. It is not implemented by default and must never change the component model.
-- Two seams are mandatory from the start so hybrid stays additive:
-  - An **isomorphic API client** that reaches `/api` identically on server and client, forwarding the session cookie via `next/headers` when run server-side.
-  - Centralized `queryOptions()` factories per resource (stable keys + query function), consumed identically by `useQuery` and by server prefetch. Query keys are never inlined in components.
-- On the server, the QueryClient is per-request (wrapped in React `cache()`).
-- UI preferences that affect the server-rendered shell (for example the primary navigation's collapsed state) persist in a cookie, read during the server render via `next/headers` so the shell paints in its correct state. `localStorage` is not used for these — it is client-only and would render the default first, then correct itself after hydration. Preferences that do not affect server-rendered output may stay in client state.
-
-## Project Structure
-
-- Route groups: `(auth)` for the shared front door (`/login`, `/reset-password`, `/auth/callback`); `(platform)/platform/…` for the console and API tooling; `(org)/app/…` for the organization experience. Each group's `layout.tsx` mounts the shell and enforces the role-group guard; wrong-namespace access is bounced by the layout, not by per-page checks.
-- Non-route code is feature-based: `src/features/<domain>/` per backend domain, holding `queries.ts` (queryOptions factories), `api.ts` (typed `/api` calls), `schemas.ts` (zod form schemas), components, and hooks. Route segments stay thin and compose feature modules.
-- Shared code: `src/lib/` (isomorphic API client, QueryClient setup, auth helpers) and `src/components/ui/` (design-system primitives).
-- `src/contracts/<domain>.contract.ts`: client-safe zod response schemas, one module per backend domain, never importing `src/server/**` or `src/types/database.ts`. The single source both the generated OpenAPI spec and any TS type derive from (phase F2, ADR-0008) — `src/types/contracts/me.ts` re-exports `z.infer`s of `src/contracts/me.contract.ts` rather than hand-authoring a parallel shape.
-- `src/server/openapi/`: the OpenAPI generation pipeline (phase F2, ADR-0008) — `registry.ts` (the hand-authored route→spec binding), `generate.ts` (document assembly from `z.toJSONSchema()`), and the committed `openapi.json` artifact, regenerated via `npm run openapi:generate` (`scripts/generate-openapi.ts`).
-- The frontend is feature-based (not layer-based like the backend) for UI domain cohesion — a screen's queries, mutations, schema, and components belong together.
-- Each feature exposes a curated `index.ts` barrel (explicit named exports, never `export *`) as its public surface. Cross-feature imports go through the barrel, never deep paths, enforced by an ESLint boundary rule. Prefer composing features at the route level over lateral feature-to-feature imports. Dependencies point down, never sideways: two peer features reaching into each other is a signal to extract the shared piece into a lower layer.
-- Component ownership: generic, domain-blind UI lives in `src/components/ui/`; domain-carrying components are owned by the feature whose domain they express and shared via its public surface. There is no generic "shared business components" bucket.
-- File growth: start single-file (`schemas.ts`, `queries.ts`, `api.ts`); promote to a folder with one file per operation when it grows.
-
-## Client Authorization
-
-- The client gates on capabilities, not roles. Components must not compare role names.
-- The client gate is advisory UX only. The route handlers' `withCapability` checks remain the security boundary.
-- `GET /api/users/me` returns identity, role, group, and org/clinic context, plus a coarse capability map computed server-side. The client consumes these flags and never derives them from the role.
-- Contextual, per-resource capabilities are not global flags: rely on the server and graceful 403 handling, and add per-item permission hints to list/detail responses only where showing-then-failing is a poor experience.
-- Enforcement: route/navigation gating via the route-group layout guard and capability-filtered navigation; within-frame gating via a `useCan()` hook / `<Can>` wrapper backed by a current-user context populated once from `/me`.
-
-## Forms and Validation
-
-- react-hook-form for form state, zod for schemas, wired via `zodResolver`.
-- Client form schemas are feature-owned and separate from the server validators, tailored for form UX (UI-only fields, tailored messages).
-- Never import `src/server` validators into client code.
-- Drift is caught at the type level: a form's submitted payload must satisfy the contract-generated request type.
-- Server validators remain the authoritative runtime validation; client validation is advisory.
-
-## Design System
-
-- Mantine is the single design system and single token source. Tailwind is not used for application UI.
-- One theme object defines colors, typography, spacing, and radii. V1 ships a light color scheme only; the theme is structured so a dark scheme can be added later via Mantine's color scheme without reworking components.
-- Build `src/components/ui` composites only where they add application convention; use Mantine components directly otherwise. Do not wrap one-to-one.
-- Custom styling uses Mantine CSS modules and style props, not sprawling inline styles.
-- Icons use a single set: Tabler.
-
-### Shared UI primitives
-
-The composites in `src/components/ui` — F0 seeds the first nine, later phases add more where a convention repeats across features. Each one exists because it encodes a convention from `UX.md` that would otherwise be re-implemented — and drift — in every phase. All are generic and domain-blind; anything domain-carrying belongs to its feature.
-
-| Primitive | Convention it encodes | Built on |
-| --- | --- | --- |
-| `PageHeader` | Destination title, optional one-line context, at most one primary action; parent and return path for a nested destination. Primary action relocates on narrow widths. | Mantine layout + `Button` |
-| `EmptyState` | Names what would appear here and offers the primary create action where permitted. | Mantine `Stack`, `Text`, `Button` |
-| `DataState` | The loading / empty / error triad for any data-driven region: skeletons matching the eventual layout, empty state, and a scoped inline error with retry. | `Skeleton`, `Alert`, `EmptyState` |
-| `ConfirmDialog` | Destructive confirmation that names the target and its consequence, with the action's verb and danger styling on the confirm button. | Mantine `Modal` |
-| `FormDialog` | Create/edit shell: titled dialog, footer actions with the primary right, submit progress, and the unsaved-changes guard. | Mantine `Modal` |
-| `DetailDrawer` | Entity detail that keeps its list in view; consistent header, close affordance, and layering rules. | Mantine `Drawer` |
-| `StatusBadge` | A status rendered as a semantic role (success / warning / danger / info / neutral) carrying both color and text, never colour alone. | Mantine `Badge` |
-| `Can` | Capability gating inside a surface — hides or disables an action rather than showing it and failing. | current-user context |
-| `ForbiddenState` | The forbidden frame: names what was refused and always carries a way back, so a 403 is never a dead end. | Mantine `Stack`, `Text`, `Button` |
-| `RevealOnce` (F3) | A secret shown exactly once, then never again — masked by default with a reveal toggle and copy affordance, dismissal routed through `ConfirmDialog` so it cannot be dismissed without naming the consequence. Domain-blind: displays *a secret*, not *a password*. | `PasswordInput`, `CopyButton`, `ConfirmDialog` |
-
-Domain status → semantic role mapping (appointment, payment, package) lives in the owning feature and is passed to `StatusBadge`; the primitive itself knows no domain.
-
-Use Mantine **directly** for everything else — `Button`, inputs, `Select`, `Table`, `Card`, `Tabs`, `Menu`, `Pagination`, `Tooltip`, `Avatar`, and the notifications system for toasts. Wrapping these adds nothing.
-
-The responsive **collection** (toolbar plus the table↔card rendering) is deliberately *not* seeded as a primitive. Its shape is still settling per destination; build it inside the first feature that needs it and extract a shared composite once two or three exist and agree.
-
-## App Shell and Navigation
-
-- The three shells (`OrgShell`, `PlatformShell`, and the `(auth)` centered layout) live in `src/components/shell/`. This is application furniture, distinct from `src/components/ui/`, which holds the domain-blind design-system primitives.
-- The primary navigation is **data, not JSX**: `NAV_ITEMS` declares each destination with the capability that reveals it, and `buildNavSections()` is a pure function from capability tokens to display sections. The rendered nav is a thin projection of its output. This is what makes "the client never compares role names" a testable property rather than a convention.
-- Only top-level destinations are nav items. Child routes and contextual surfaces are reached from within a destination (ADR-0001).
-- Shell preferences that affect server-rendered output (nav collapsed state, current clinic) persist in cookies named in `shell-preferences.ts`, read in the route-group layout via `cookies()` and passed down as initial state. Never `localStorage` — it would paint the default first and correct itself after hydration.
-- `zustand` remains reserved for UI-only state that does *not* affect the server render; nothing in the shell needs it today.
-
-## Frontend Testing
-
-- Component tests are the verification gate for UI work, using the jsdom lane of the Vitest config (`tests/components/**`, `*.test.tsx`).
-- Every component test renders through `renderWithProviders` (`tests/helpers/render.tsx`), which mounts the same provider tree as the application — theme, QueryClient, current-user context — with `env="test"` so Mantine transitions and portals do not interfere. Identity comes from the `CurrentUser` fixtures in `tests/helpers/current-user.ts`, whose per-role capability sets mirror what `me.service.ts` computes.
-- **What component tests can and cannot prove:** they cover logic and DOM — capability filtering, state machines, accessible names and roles, ARIA state. They cannot prove *visual* responsiveness: Mantine's `visibleFrom`/`hiddenFrom` and breakpoint collapse are CSS media queries, which jsdom does not evaluate. Viewport-accurate verification is manual until the F10 responsive pass.
-- **E2E (Playwright), per-module from F3 onward.** ADR-0002 deferred Playwright to F10 as a lump-sum addition; in practice, F3 brought it forward as another test lane rather than a separate architectural decision — the formal ADR recording browser-based testing as a first-class part of the stack still lands at F10, once the pattern has run across enough phases to describe it properly, but every F-phase from F3 on writes its own E2E specs as part of that phase's own TDD work, not deferred to the end. Its own runner and lifecycle (`playwright.config.ts`, `tests/e2e/`), seeded directly against the local Supabase stack the same way `tests/helpers/integration-context.ts` seeds the Vitest integration lane, scoped to what only a real browser proves — actual session cookies and sign-in, real navigation, CSS media queries, the clipboard — never a re-cover of what the jsdom component lane already asserts. Run via `npm run test:e2e`; requires the local stack running and `next dev` (started automatically).
-
-## Error Handling and Types
-
-- The isomorphic API client is the single place that parses the `{ error, code }` response envelope and throws a typed `ApiError` (`code`, `message`, `status`). Nothing downstream hand-parses responses.
-- One code→behavior mapping module mirrors the backend `ErrorCodes`, mapping each code to a default handling behavior (toast, inline field errors, redirect to login, forbidden view) with its message as one facet, overridable per screen. Cross-cutting cases (401, network) go through TanStack Query's cache-level `onError`.
-- 400 validation errors (with `details`) are mapped back to react-hook-form fields via `setError`.
-- Frontend types derive from the API contract, not the database. `src/types/database.ts` stays server-only and never crosses into client code. Response types derive from `src/contracts/<domain>.contract.ts` — client-safe zod schemas that are the single source both the generated OpenAPI spec and the TS types (`z.infer`) derive from (phase F2, ADR-0008), so drift between spec and type is structurally impossible rather than merely caught. `src/types/contracts/me.ts` is the worked example: it re-exports `z.infer`s of `src/contracts/me.contract.ts` with no change to any consumer. Form value types come from `z.infer` on the client form schemas; error codes are shared or generated from the backend `ErrorCodes`.
+The user experience those conventions serve — information architecture, user flows, screen inventory, interaction/state conventions — is defined in **[UX.md](UX.md)**. `docs/frontend.md` owns the *how* (architecture); `UX.md` owns the *what* and *why* (experience).
 
 ---
 
@@ -1347,6 +1241,8 @@ Minor implementation details, bug fixes, refactoring, naming changes, or isolate
 Accepted ADRs are immutable. If an architectural decision changes, create a new ADR that supersedes the previous one rather than modifying historical ADRs.
 
 The implementation plan should reference any new or updated ADRs whenever architectural decisions are introduced.
+
+Frontend and UX ADRs are stored one per file in [docs/adr/](docs/adr/README.md) and indexed in that directory's `README.md`; broader project/domain decisions are recorded in the *Project Decisions* section above.
 
 ---
 
@@ -1579,19 +1475,11 @@ This convention applies to future entities supporting soft deletion.
 
 # Test-Driven Development (TDD)
 
-## Development Workflow
+## Policy
 
-All new features and bug fixes **must follow a Test-Driven Development (TDD) workflow** unless explicitly instructed otherwise.
+All new features and bug fixes **must follow a Test-Driven Development workflow** unless explicitly instructed otherwise. A test for a behavior is written before the production code that satisfies it, and is observed failing for the stated reason before that code exists.
 
-The expected development sequence is:
-
-1. Define or update the implementation plan.
-2. Identify the required test scenarios.
-3. Implement automated tests.
-4. Verify that the tests fail for the expected reason.
-5. Implement production code.
-6. Refactor while keeping tests passing.
-7. Execute the complete verification suite.
+This section states the *policy* — that TDD is mandatory and what "complete" means under it. **The cycle itself is not defined here.** How to run it — slice boundaries, the tracer-bullet first pass, the per-cycle checks, when to refactor — belongs to the `tdd` skill in `.claude/skills/tdd/`, which is the authority on procedure. Follow that skill when implementing; this section is what it is accountable to.
 
 Production code is **not considered complete** until the corresponding automated tests exist and pass.
 
@@ -1628,131 +1516,21 @@ Before a development phase is considered complete:
 - Service layer is complete.
 - Authorization is implemented.
 - RLS policies are implemented and verified where applicable.
-- TypeScript compilation passes (`npx tsc --noEmit`).
-- Linting passes with zero errors (`npx eslint .`), confirmed via eslint's own exit code — never a value piped through another command (e.g. `| tail`), which masks the real status.
-- Production build passes (`npm run build`).
+- TypeScript compilation passes.
+- Linting passes with zero errors.
+- Production build passes.
+- Unit, API and component tests pass.
 - Integration tests pass.
-- API tests pass where applicable.
-- Documentation (`AGENTS.md` and ADRs) is updated if new architectural decisions were introduced.
+- Documentation is updated if new architectural decisions were introduced — `AGENTS.md` (core/backend conventions), `docs/frontend.md` (frontend conventions), and a new record in `docs/adr/` plus its index row.
+
+The mechanical checks in that list — types regeneration, TypeScript, lint, tests, and build — are run by **`npm run verify`**; `npm run verify:full` adds the integration and E2E lanes. Use it rather than running them by hand.
+
+It runs the steps in the order above, stops at the first failure, and reads each step's own exit code, so no step's status can be masked by piping it through another command and nothing can compile against types that were regenerated afterwards. Add `--quiet` (or use `npm run verify:quiet`) to send each step's full output to `.verify.log` and print only a status line per step — the form to use when an agent is running it, since every line of tool output is context. A step whose environment prerequisite is missing — no local Supabase stack — is reported as **skipped** rather than passed, and the run is recorded as incomplete. The remaining checklist items are judgment calls and stay manual.
 
 ---
 
 # Frontend Decision Records
 
-Accepted frontend and UX ADRs, append-only and immutable per the ADR convention above. Broader project/domain decisions live in the *Project Decisions* section; this log is scoped to the frontend track (F0–F10) and uses ADR codes. UX ADRs carry their full design detail in `UX.md` and are referenced from it.
+Accepted frontend and UX ADRs live in **[docs/adr/](docs/adr/README.md)**, one file per record, indexed by number, title, scope, and status. The log is append-only and immutable per the ADR convention above.
 
-## ADR-0001 — Navigation & Surface Model
-
-- **Status:** Accepted (2026-07-17)
-- **Scope:** UX / Frontend
-- **Context:** The frontend (F0–F10) needs a consistent rule for when a screen becomes a routed page versus contextual UI. Unbounded routing produces deep breadcrumb chains, loss of working context, and a steeper learning curve.
-- **Decision:** Dedicated routes are a scarce resource, reserved for **independent destinations** — workspaces users navigate to for focused work. All other surfaces (create/edit, entity detail, short self-contained tasks, child resources without their own workspace, frequent quick actions) render as **contextual UI** — dialogs, drawers, tabs, or inline sections — layered over their originating context. A child that is itself a substantial workspace (e.g. a consultation) may still earn a route.
-- **Consequences:** The organization app resolves to ~13 destinations; details and actions are hosted surfaces rather than routes. Navigation stays shallow and working context is preserved. New screens must justify a route against the destination test or default to contextual UI.
-- **Reference:** `UX.md` → *Navigation & Surface Model* (full design detail and the screen inventory).
-
-## ADR-0002 — Frontend UI Testing Framework
-
-- **Status:** Accepted (2026-07-26)
-- **Scope:** Frontend
-- **Context:** The frontend track (F0–F10) needs an automated verification gate for UI work from its first increment, not retrofitted at F10. The repository already runs Vitest for server tests, but only in a Node environment with no way to render a component.
-- **Decision:** React Testing Library with `@testing-library/jest-dom` and `@testing-library/user-event`, running on the existing Vitest toolchain in a **jsdom** lane selected by `environmentMatchGlobs` (`tests/components/**` and any `*.test.tsx`); the Node lane is unchanged. A single global setup file registers the jest-dom matchers, runs RTL cleanup, and installs the browser API shims Mantine requires (`matchMedia`, `ResizeObserver`, `scrollIntoView`), all guarded so the Node lane is untouched. Every component test renders through a shared `renderWithProviders` helper that mounts the real provider tree. E2E (Playwright) remains a F10 concern and is deliberately not brought forward.
-- **Consequences:** One test runner and one config for the whole codebase. Component tests prove logic, DOM structure, and accessibility semantics; they cannot prove CSS-media-query behavior, so viewport-accurate responsive verification stays manual until F10. A UI change without a component test is incomplete.
-
-## ADR-0003 — Current-User Contract as the Single Client Identity Source
-
-- **Status:** Accepted (2026-07-26)
-- **Scope:** Frontend / Authorization
-- **Context:** The client needs to know who the user is and what they may reach, without re-deriving authorization rules that the backend already owns — and without leaking role names into components, which would make every future role change a UI change.
-- **Decision:** `GET /api/users/me` returns identity, role (system name plus display name), group (`platform` | `org`), organization, accessible clinics, and a **coarse capability map computed server-side**. The map is keyed by **contract-owned capability tokens** (`domain:action`, defined once as the `Capability` union in `src/types/contracts/me.ts`), deliberately decoupled from the backend predicate names so `authorization.service.ts` can be renamed or recomposed without changing the wire format or any client. `me.service.ts` maps each token onto its internal predicate. Clients consume tokens and never compare role names; the contract module is hand-authored now and is the seam F2's OpenAPI generation replaces.
-- **Consequences:** Four purpose-specific predicates were added to `authorization.service.ts` (`canOverseeAppointments`, `canOverseeAttendance`, `canManageOrganizationSettings`, `canViewReports`) because the existing broad `canView*` read gates admit any active member and would over-expose the navigation relative to the UX navigation table. The capability map is the navigation/coarse set only — contextual, per-resource capabilities stay server-side and surface as graceful 403 handling. Client gating remains advisory; `withCapability` in the route handlers is the security boundary.
-
-## ADR-0004 — Isomorphic API Client and Error Envelope Parsing
-
-- **Status:** Accepted (2026-07-26)
-- **Scope:** Frontend
-- **Context:** The frontend consumes `/api` from both Server Components and the browser. Without one client, each context would grow its own fetch, its own envelope parsing, and its own error copy — and hybrid rendering later would require rewriting components rather than adding a prefetch.
-- **Decision:** One client (`src/lib/api/client.ts`) reaches `/api` identically in both environments, resolving an absolute origin and forwarding the session cookie via `next/headers` when run server-side. It is the single place that parses the `{ error, code, details }` envelope and throws a typed `ApiError`. A companion code→behavior map (`src/lib/api/error-codes.ts`) is typed as a total `Record<ErrorCode, …>`, so adding a backend error code fails the build until the client decides how to present it. Cross-cutting failures (expired session, dead connection) are handled once at TanStack Query's cache level via a pure `error-policy` module; `forbidden` and `inline` are left to the screen that asked. Query keys are never inlined — each resource exposes `queryOptions()` factories.
-- **Consequences:** Server prefetch is additive rather than a rewrite. Error copy lives in one place and is overridable per screen. A new backend error code cannot ship silently. 400 responses keep their `details` payload for mapping onto form fields via `setError`.
-
-## ADR-0005 — Namespace Route Groups, Layout Guards, and the Pure Landing Resolver
-
-- **Status:** Accepted (2026-07-26)
-- **Scope:** Frontend / Authorization
-- **Context:** Three audiences share one application: the shared front door, the platform console, and the organization app. Enforcing "who may be here" per page would scatter the rule and let a new page silently omit it; enforcing it in the proxy would make Next's Proxy an authorization layer, which its own documentation warns against.
-- **Decision:** Three route groups — `(auth)` (no shell), `(platform)/platform/…`, `(org)/app/…` — each with a `layout.tsx` that resolves the current user server-side, applies the guard, and mounts its shell. The decision itself is two **pure functions** over `CurrentUser` (`resolveLanding`, `guardNamespace`) that return a redirect target or `null`, with no Next, Supabase, or cookie dependency. `getCurrentUser()` is wrapped in React `cache()` so one request shares a single `/me` fetch. A single root layout is retained (`<html>`/`<body>`, theme, providers): multiple root layouts would force a full page load when moving between namespaces. Wrong-namespace access bounces to the user's own home, never to a dead end. The proxy keeps only session refresh and coarse redirects, sending signed-in users at the front door to `/`, where the landing resolver decides.
-- **Consequences:** The whole redirect matrix is unit-tested against fixtures with no session or database. A new page inherits its guard from the group it is placed in, and cannot forget it. Pages never repeat the check.
-## ADR-0006 — Shared UI Primitives: Conventions Encoded as API
-
-- **Status:** Accepted (2026-07-27)
-- **Scope:** Frontend / UX
-- **Context:** `UX.md` defines conventions every surface must honor — a destructive confirmation names its target and consequence, a loading state uses layout-matched skeletons rather than a spinner, a status carries text as well as color. Written as guidelines, each one is re-decided per screen and drifts across ten phases. The eight primitives in `src/components/ui` exist to hold these conventions, and the question is how firmly.
-- **Decision:** Where a convention can be made **structurally required** by the component's type signature, it is — the primitive makes the correct thing the only expressible thing, not merely the documented one:
-  - `ConfirmDialog` requires `target`, `consequence`, and a verb `confirmLabel`, so "Are you sure? / OK" cannot be rendered through it.
-  - `DataState` requires a `skeleton` node, so "bare spinner" is not the easy path; no layout presets ship in F0 (they belong with the collection composite, deferred to its first consumer).
-  - `StatusBadge` requires a `label`, so a status can never be color alone.
-  - `PageHeader` accepts at most one `primaryAction`, so "two primary buttons" is not expressible.
-  All eight are **domain-blind**: the domain status → semantic role mapping lives in the feature that owns the domain and is passed in. Capability gating is not built into primitives — callers withhold an action or wrap it in `<Can>`, so there is exactly one gating mechanism. `Can` is backed by the current-user context in `src/lib/auth/`, not by a feature, so a shared primitive depends downward on shared infrastructure rather than sideways on a feature.
-- **Consequences:** Primitive APIs are slightly stricter than a thin Mantine wrapper would be, and callers must supply real copy and a real skeleton. In exchange the conventions cannot quietly erode: violating one is a type error rather than a review comment. Two conventions resist type-level encoding and remain **documented invariants**: *no drawer over a dialog* (enforcing it would require shared mutable overlay state across primitives, which costs more than the mistake it prevents — a dialog over a dialog, as `FormDialog`'s discard guard uses, is permitted and is the same task's guard), and *Undo on a soft delete*, which belongs to the success toast the caller fires, not to the confirmation.
-- **Related:** `StatusBadge` renders Mantine's `light` variant — in Mantine 9, shade 9 text on a shade 1 surface, independent of `theme.primaryShade`. `tests/unit/semantic-contrast.test.ts` measures every role in `SEMANTIC_ROLES` against WCAG AA in both that pairing and white-on-`shade[primaryShade]`; changing `primaryShade` or passing an explicit shade (`color="warning.6"`) re-opens that audit and fails the suite if it drops below AA.
-
-## ADR-0007 — The Auth Route Client and the Password-Setup Ticket
-
-- **Status:** Accepted (2026-07-27)
-- **Scope:** Frontend / Authorization
-- **Context:** F1 moves authentication itself behind `/api`, which the scaffold could not express. The Server-Component Supabase client's `setAll` is a deliberate no-op — the proxy owns session refresh — so a route handler that signs a user in, signs them out, or rotates their password would authenticate successfully and then silently discard the resulting cookies: a failure that presents as success. Separately, the reset and invitation flows must let a user set a password *without* knowing the current one, while voluntary change-password must require it. The existing authorization model reasons about *who a user is* (roles projected onto capability tokens, ADR-0003) and has no way to express the only proof an invited or locked-out user can offer: that they controlled the account's inbox moments ago.
-- **Decision:** Two parts, one mechanism.
-  1. **A single cookie-writing Supabase client**, `createRouteClient()` in `src/lib/supabase/route.ts`, used exclusively by `/api/auth/*` route handlers — the one context where Next 16 permits `cookies().set()`. The Server-Component client keeps its no-op `setAll` unchanged, so session cookies are written in exactly one module and merely read everywhere else.
-  2. **The password-setup ticket**: a short-lived (15 minute), `httpOnly`, `sameSite=lax` cookie issued by `/auth/callback` on its `recovery` and `invite` branches, carrying only which flow issued it. `POST /api/auth/set-password` requires it *alongside* a valid session and clears it on use. The ticket is an authorization fact about **how a session was obtained**, not about who the user is; it is deliberately kept out of the capability map, which remains the vocabulary for what a role may do.
-- **Consequences:** Authentication joins every other operation behind the single `/api` contract, without a class of bug where a route authenticates and loses the session. The no-current-password path is reachable only within minutes of clicking a link delivered to the account's email, so voluntary change-password's current-password requirement cannot be bypassed from an unattended, unlocked workstation. Because session plus ticket already carry the proof, the confirm screens need no token in their URL — this is what makes the static `/reset-password/confirm` and `/invite` routes sound, superseding `UX.md`'s earlier `[token]` segments. The ticket's absence is also the signal those pages render their expired-link state from, so an expired link explains itself instead of dead-ending. The proxy's front-door matcher gains a session-required class, without which the callback would bounce recovery and invite users into the app before any password is set. A second, non-capability authorization input now exists in the system: it is intentionally narrow — one cookie, one route, one expiry — and any pressure to generalize it should be reconsidered as its own decision rather than absorbed here.
-
-## ADR-0008 — Spec Generation and the Shared Contract Layer
-
-- **Status:** Accepted (2026-07-28)
-- **Scope:** Frontend / Backend
-- **Context:** F2 needs an OpenAPI document covering all ~90 `/api` operations for the platform API explorer. Route handlers (`src/lib/api/route-handler.ts`) carry no introspectable metadata — a validator is just a function call inside the closure, and nothing declares whether a schema describes a body, a query, or which status codes an operation can return. Separately, `AGENTS.md` had asserted "request/response types are generated from the OpenAPI spec (phase F2)," and ADR-0003 named the hand-authored `src/types/contracts/me.ts` as the seam this phase would replace — but no response schema existed anywhere in the codebase to generate a spec, or types, from.
-- **Decision:** Four parts.
-  1. **Native `z.toJSONSchema()`**, no new dependency, verified against every awkward pattern already in the validators (`.pipe()`, `z.preprocess`, `z.coerce`, object-level `.refine()`, `z.string().date()`/`.uuid()`).
-  2. **A hand-authored route registry** (`src/server/openapi/registry.ts`) binding method+path to summary/tag/params/request/response schemas — not a `createRouteHandler` metadata parameter (would touch all 60 route files and the shared wrapper) and not AST codegen (two operations pass an unvalidated body straight to a service that validates internally, with no schema reference in the route file at all — codegen has nothing to parse there). `tests/unit/openapi-registry-parity.test.ts` asserts a bijection between the registry and the actual route filesystem, so a new or changed route cannot silently drift out of the spec.
-  3. **A new client-safe `src/contracts/` layer**, one module per domain (`src/contracts/<domain>.contract.ts`), holding zod response schemas that mirror each service's real return type. This is the single source both the generated spec and any TS type derive from — `src/types/contracts/me.ts` now re-exports `z.infer`s of `src/contracts/me.contract.ts` with no change to any consumer, discharging what ADR-0003 named. This corrects `AGENTS.md`'s "Error Handling and Types" line, quoted above: the direction runs contract-module → both spec and types, not spec → types, since no codegen-from-OpenAPI-to-TypeScript tool is in use (would be a new dependency) and the inverse gives the same guarantee — drift is structurally impossible, not just caught — for free.
-  4. **Build-time generation** (`scripts/generate-openapi.ts`, run via `npm run openapi:generate`) into a committed artifact (`src/server/openapi/openapi.json`), imported statically by the spec route rather than generated per-request, so the validator tree the registry touches never enters the route's serverless bundle. There is no CI yet (`ROADMAP.md` → R9), so `tests/unit/openapi-spec.test.ts` — regenerating the document in memory and deep-equaling the committed one — is what makes drift between the two visible; it runs under plain `npm test` today and R9's CI inherits it for free. No `prebuild` hook: `npm run build` is a Phase Completion Checklist gate, and a prebuild step that silently rewrites a committed file mid-verification would mask drift rather than reveal it.
-- **Consequences:** All 90 operations' request shapes, and all but one operation's response shape (the spec endpoint's own `200`, which is the OpenAPI document itself and does not benefit from documenting its own shape recursively), are covered. Every operation also carries a mechanical error-response floor derived only from fields already in its registry entry (`auth`, `pathParams`, presence of a body/query) — `400`/`401`/`403`/`404`/`500` as applicable — because the registry does not record which `AppError` codes a given service call chain can throw; auditing that for all 90 operations is a named follow-up, not a silent gap, and the floor is deliberately over-inclusive (e.g. `403` on every session route) rather than under-documenting a security-relevant status. Three validator-level fidelity fixes shipped alongside the generator rather than as spec-only annotations: `user.validator.ts`'s role enum is now genuinely `ORG_`-only (previously a `.refine()` on top of all 8 roles, invisible to the generated spec, so it would have documented `SUPER_ADMIN` as an acceptable value here); `.describe()` calls on `report.validator.ts`'s and `auth.validator.ts`'s cross-field `.refine()`s surface those rules in the spec, since a rule spanning multiple query parameters cannot attach to any one flattened parameter and is instead read off the schema's own description and folded into the operation's; and the generator itself backfills a `.pipe()` field's lost format (patient `email`) from a second, output-mode conversion, and overrides `isActive`'s wire representation to the query string it actually is rather than the boolean `z.preprocess` coerces it to. `src/server/validators/patient.validator.ts`'s `.pipe()` idiom is otherwise unchanged; the format-backfill is a generator concern, not a validator rewrite.
-
-## ADR-0009 — API Explorer Access Control and the Environment Dimension
-
-- **Status:** Accepted (2026-07-28)
-- **Scope:** Frontend / Authorization
-- **Context:** The API Explorer is UX.md's SUPER_ADMIN-only V1 platform surface, but the platform namespace guard (`guardNamespace`, ADR-0005) is group-level: it admits every platform role, including `PLATFORM_SUPPORT` / `PLATFORM_SALES` / `PLATFORM_BILLING`, none of which have any UI in V1. Against the `DestinationStub` this was latent; against a working try-it-out console reaching every `/api` operation with no restrictions (below), it is a live privilege-escalation path. Separately, the explorer's same-origin try-it-out executes arbitrary requests — including `DELETE`, organization bootstrap, and payment transitions — with no confirm step and no denylist, against whatever database the deployment is pointed at; the only acceptable containment is that the surface does not exist in production at all.
-- **Decision:** Two authorization inputs, following the precedent ADR-0007 set for the password-setup ticket as a second, non-capability input alongside the capability map.
-  1. **A new capability token**, `platformApi:explore`, added to `CAPABILITIES` (now sourced from `src/contracts/me.contract.ts`, ADR-0008) and wired through `CAPABILITY_PREDICATES` in `me.service.ts`. Its predicate, `canExplorePlatformApi` in `authorization.service.ts`, is `hasRole(supabase, userId, "SUPER_ADMIN")` — the same one-line shape as `canBootstrapOrganization`. This required a structural change to `me.service.ts`: platform users previously received an unconditionally empty capability array (`isOrgUser ? computeCapabilities(...) : []`), which made a platform-only capability inexpressible. `computeCapabilities` now takes an explicit vocabulary argument, and two vocabularies — `ORG_CAPABILITIES` and `PLATFORM_CAPABILITIES` — partition the full `Capability` union (`tests/unit/me-capabilities.test.ts` proves the partition: no token left ungrantable, none evaluated by both). The API Explorer page gates on the token via the existing `<Can capability="..." fallback={...}>` primitive — not a new mechanism — rendering `ForbiddenState` in place for a platform-group user without it. A redirect was not an option: `resolveLanding` sends every platform-group user to `/platform/admin`, so redirecting a disallowed one away from it sends them right back.
-  2. **Environment as a second, non-capability input**: `src/lib/env.ts`, new cross-cutting infrastructure (this codebase's only prior `NODE_ENV` reference was an incidental cookie flag), exposing `isApiExplorerEnabled()` — hard-disabled in production, no opt-in flag, checked by both the spec endpoint and the explorer page. The spec endpoint checks environment *before* authentication is consulted, 404ing as if the route did not exist rather than 401/403ing in a way that would confirm it does — the one sanctioned exception to `createRouteHandler` authenticating first by convention, documented here rather than added as a variant to the shared wrapper.
-- **Consequences:** `PLATFORM_SUPPORT` / `SALES` / `BILLING` reaching `/platform/admin` is no longer a live escalation path — `tests/integration/me.test.ts` pins that all three receive no capabilities, the regression this restructure exists to close. Try-it-out's lack of restrictions (decision, not oversight: every verb, no confirm, no denylist, live database) is contained entirely by environment, not by role or by in-app guardrails — this makes the local/staging development habit of running the explorer against a local Supabase stack, not a shared one, load-bearing rather than merely advisable. The explorer's raw-`fetch` executor (`src/features/platform-api/api.ts`) is a second sanctioned exception, this time to ADR-0004: it deliberately bypasses `src/lib/api/client.ts`, whose typed `ApiError` would swallow the raw status, headers, and body this surface exists to display verbatim, including for the three binary export routes. A third non-capability authorization input existing alongside the password-setup ticket is exactly the kind of generalization ADR-0007 warned should be its own decision rather than absorbed into that one — this ADR is that decision, made deliberately rather than by accretion.
-
-## ADR-0010 — Per-Item Permission Hints for Row-Level Gating
-
-- **Status:** Accepted (2026-07-31)
-- **Scope:** Frontend / Authorization
-- **Context:** F3 is the first destination with hierarchy-gated row actions: `canCreateUser` admits only the target roles the caller's role may create (an `ORG_ADMIN` may create Physiotherapist/Receptionist but not Owner or Admin), and `canManageTargetUser`/`canUpdateUserRole` refuse an `ORG_ADMIN` acting on the Owner or another Admin. The client holds only the coarse `users:manage` token (ADR-0003) and cannot derive either the assignable-role set or per-row manageability from it — showing every action on every row and letting the request 403 violates `UX.md:136` ("actions a user cannot perform are hidden or disabled rather than shown and then failing"). ADR-0003's own Consequences state the opposite-leaning default: "contextual, per-resource capabilities stay server-side and surface as graceful 403 handling." The two pull in opposite directions, and `AGENTS.md` → *Client Authorization* is what actually names the escape hatch ("add per-item permission hints to list/detail responses only where showing-then-failing is a poor experience") — not ADR-0003, which does not sanction hints and would be misread if cited as though it did.
-- **Decision:** `GET /api/users` and `GET /api/users/{id}` responses carry a server-computed `canManage: boolean` per row/detail (`manageableUserSchema`), and the list response additionally carries a caller-derived `assignableRoles: { name, display_name }[]` (not per-row: `canCreateUser`'s and `canUpdateUserRole`'s target-role checks both reduce to exactly `ROLE_HIERARCHY[callerRole]`, so one list serves both the create-user and change-role pickers, computed once rather than per row to avoid an N+1 of two-lookup `canManageTargetUser` calls over a page). `assignableRoles` returns `display_name` alongside `name` so the client never hardcodes a role → label map or compares role names anywhere (`UX.md` → *Copy & formatting*: role display names only, never system codes). This **supersedes ADR-0003's "graceful 403 handling" consequence** for row-level actions specifically — accepted ADRs are immutable, so the supersession is recorded here rather than editing that entry. The hints are advisory only: `canCreateUser`, `canManageTargetUser`, and `canUpdateUserRole` in `authorization.service.ts` remain the actual security boundary, unchanged by this decision.
-- **Consequences:** `listOrganizationUsers` and `getUserDetails` (`user.service.ts`) compute `canManage` in-memory from the caller's own role (resolved once) and each row's already role-embedded `role.name`, rather than calling `canManageTargetUser` per row — avoiding the N+1 that predicate's two lookups would otherwise cost over a page. Any future destination with hierarchy-gated row actions (row-level menus elsewhere) should follow this same shape — `canManage`/equivalent per row, a caller-derived option list where the target set reduces to a caller-only function — rather than re-deriving the pattern.
-
-## ADR-0011 — Compensation Visibility and the Permissive RLS Backstop
-
-- **Status:** Accepted (2026-07-31)
-- **Scope:** Frontend / Authorization / Backend
-- **Context:** `UX.md` (Screen Inventory and Flow 9) scopes the user compensation surface to Owner only, while general user management is Owner **and** Admin. Before F3, no authorization layer expressed this split: `canManageCompensation` (the only existing predicate touching `user_compensations`) is `hasAnyRole(ORG_MANAGEMENT_ROLES)` — identical to `canManageUsers` — and its own doc comment scopes it to *setting*, not viewing; there was no read predicate at all. The RLS SELECT policy on `user_compensations` admits `ORG_OWNER`/`ORG_ADMIN` (matching the write policies), which is the only "read" signal in the system prior to this phase, and it is the wrong layer to narrow: `getCommissionReport` → `calculateCommission` → `listCompensationsByUser` runs under the **caller's own session-scoped Supabase client** (`route-handler.ts` never passes an admin client), and this exact path is reachable by an Admin running the commission report (`canViewPhysiotherapistReports` admits Owner/Admin/Physio). If the SELECT policy were narrowed to Owner-only, RLS would filter rather than error: `listCompensationsByUser` would return an empty array for an Admin caller, and `calculateCommission` treats a missing compensation record identically to `type: "none"` — every Admin-run commission report would silently return `totalCommission: 0`, with no error and nothing in the UI to suggest the number is wrong.
-- **Decision:** Compensation visibility is Owner-only on product/privacy grounds (staff pay is more sensitive than general profile/role data), not derived from a consistency argument. A new `canViewCompensation` predicate and a narrowed `canManageCompensation` — both `hasAnyRole(["ORG_OWNER", "SUPER_ADMIN"])`, a `COMPENSATION_ROLES` set distinct from and narrower than `ORG_MANAGEMENT_ROLES` — gate `getUserCompensationHistory` (new: `GET /api/users/{id}/compensation`, full history newest-first) and `setUserCompensation` respectively. A new `compensation:view` capability token is added to `ORG_CAPABILITIES` only (not `PLATFORM_CAPABILITIES`) — `SUPER_ADMIN`'s predicate passes but it never receives the token, the same asymmetry `users:manage` already has for that role. **The RLS SELECT policy on `user_compensations` is deliberately left permissive to `ORG_OWNER`/`ORG_ADMIN`, unchanged.** The Owner-only boundary lives entirely in the new predicate and the client's `compensation:view` gate; RLS remains a backstop against direct data-layer access, not the enforcement point for this particular UX-level restriction.
-- **Consequences:** Any future change to `canManageCompensation` or its role set must re-verify `commission.service.ts:37`'s single caller and the RLS-narrowing trap described above before touching the SELECT policy — this ADR is the durable record of why that policy stays permissive, since the reasoning is not visible from the policy definition itself and a future contributor "tidying" it to match the narrowed predicate would silently zero every Admin-run commission report. `getUserCompensationHistory` reverses `listCompensationsByUser`'s existing ascending-by-`effective_from` order in-memory rather than adding a new repository query or changing the existing one's order, since `calculateCommission`'s effective-date resolution depends on that ascending order.
-
-## ADR-0012 — Organization-Profile Capability and Per-Call-Site Toast Suppression
-
-- **Status:** Accepted (2026-08-01)
-- **Scope:** Frontend / Authorization / Error Handling
-- **Context:** F4 needed two client-side mechanisms neither existing convention covered.
-
-  First, decision 4 of the F4 plan requires the Settings Organization tab to render editable for `ORG_OWNER`/`SUPER_ADMIN` and read-only for `ORG_ADMIN`, but the only existing capability token for this destination, `settings:manage`, admits all three and only gates *opening* Settings (`canManageOrganizationSettings`) — the same "coarse token can't express a narrower boundary" gap ADR-0011 hit for compensation viewing, now recurring for organization-profile editing.
-
-  Second, M6's dedicated limit-enforcement state (`UX.md` → *Error → default behavior*, "Limit / subscription enforcement" row) needed to replace the generic toast at exactly two call sites — `createOrganizationUser`/`createClinic`'s `ORGANIZATION_LIMIT_EXCEEDED`/`SUBSCRIPTION_REQUIRED` — while leaving the other five `SUBSCRIPTION_REQUIRED` sites (appointment, invoice, payment, patient-package ×2) on the flat toast, since F4 does not own those surfaces (`UX.md`'s F4 note on the enforcement table). `resolveQueryErrorAction`'s `ERROR_BEHAVIORS` map (`error-codes.ts`) is keyed by error **code**, not by call site — the cache-level `MutationCache.onError` that reads it fires identically for every mutation that throws a given code, with no way to know which screen it came from.
-- **Decision:** Two additions, following the precedent ADR-0009 and ADR-0011 set for the same class of change (a new capability token wired through the existing total map, in ADR-0009's case; a narrower predicate + token pair, in ADR-0011's).
-  1. **A new capability token**, `organization:manage`, added to `CAPABILITIES` (`me.contract.ts:29`) and wired through `CAPABILITY_PREDICATES`/`ORG_CAPABILITIES` in `me.service.ts:52,77`. Its predicate is `canUpdateOrganizationProfile` (`authorization.service.ts`, F4 M0-B) — `hasAnyRole(["ORG_OWNER", "SUPER_ADMIN"])`, deliberately narrower than `settings:manage`'s `canManageOrganizationSettings`. `OrganizationTab` (`src/features/organization/components/organization-tab.tsx`) gates on it via the existing `useCan` hook, no new mechanism.
-  2. **A `meta.suppressToastForCodes` opt-in on the mutation itself**, not a change to `ERROR_BEHAVIORS`. `MutationErrorMeta` (`error-policy.ts:73-74`) is an interface with one optional field, read by `resolveQueryErrorAction` (`error-policy.ts:81,88`) and threaded from `MutationCache`'s `onError` via `mutation.meta` (`query-client.ts:25,58`). `CreateUserDialog` and `ClinicFormDialog` set `meta: { suppressToastForCodes: LIMIT_ENFORCEMENT_CODES }` on their create mutations (`create-user-dialog.tsx:62`, `clinic-form-dialog.tsx:79`) and render `<LimitEnforcementState code={...} />` locally when `mutation.error` matches. **The `ERROR_BEHAVIORS` default for `SUBSCRIPTION_REQUIRED`/`ORGANIZATION_LIMIT_EXCEEDED` was deliberately left as `toast`, unchanged.** That map is global per code; flipping either entry to `none` (the shape `forbidden`/`inline` already use to opt out of the cache-level toast) would have silently killed toast feedback at the five out-of-scope call sites too, since they share the same code and the map has no per-caller dimension. The opt-in lives on the mutation, the one place that already knows which screen it is.
-- **Consequences:** Every mutation that does not set `meta.suppressToastForCodes` keeps the exact F3-era flat-toast behavior — proven by `query-client-error-dispatch.test.tsx`'s two pre-existing D8 tests passing unmodified, and by `query-error-policy.test.ts`'s explicit "still toasts a suppressed-elsewhere code when the caller did not opt in" case. Any future call site that wants the dedicated enforcement state instead of the flat toast sets the same `meta` field on its own mutation; it does not touch `ERROR_BEHAVIORS`, and does not need to — that map stays the correct default for every call site that has not opted out. A future contributor tempted to "simplify" by changing `ERROR_BEHAVIORS`' `SUBSCRIPTION_REQUIRED`/`ORGANIZATION_LIMIT_EXCEEDED` entries directly would silently regress the five sites F4 does not own; this ADR is the durable record of why that map was left alone.
+Read the index, then only the records the current increment touches — do not load the whole log by default. Broader project/domain decisions remain in *Project Decisions* above.

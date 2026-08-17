@@ -1,0 +1,7 @@
+# ADR-0004 — Isomorphic API Client and Error Envelope Parsing
+
+- **Status:** Accepted (2026-07-26)
+- **Scope:** Frontend
+- **Context:** The frontend consumes `/api` from both Server Components and the browser. Without one client, each context would grow its own fetch, its own envelope parsing, and its own error copy — and hybrid rendering later would require rewriting components rather than adding a prefetch.
+- **Decision:** One client (`src/lib/api/client.ts`) reaches `/api` identically in both environments, resolving an absolute origin and forwarding the session cookie via `next/headers` when run server-side. It is the single place that parses the `{ error, code, details }` envelope and throws a typed `ApiError`. A companion code→behavior map (`src/lib/api/error-codes.ts`) is typed as a total `Record<ErrorCode, …>`, so adding a backend error code fails the build until the client decides how to present it. Cross-cutting failures (expired session, dead connection) are handled once at TanStack Query's cache level via a pure `error-policy` module; `forbidden` and `inline` are left to the screen that asked. Query keys are never inlined — each resource exposes `queryOptions()` factories.
+- **Consequences:** Server prefetch is additive rather than a rewrite. Error copy lives in one place and is overridable per screen. A new backend error code cannot ship silently. 400 responses keep their `details` payload for mapping onto form fields via `setError`.

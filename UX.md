@@ -4,13 +4,13 @@ This document is the durable source of truth for the PhysioCare user experience.
 
 It complements, and does not duplicate, the engineering documentation:
 
-- `AGENTS.md` — Frontend Engineering Guidelines define the *architecture* (Mantine design system, TanStack Query, feature structure, capability gating). This document defines the *experience* that architecture serves.
+- `docs/frontend.md` — the Frontend Engineering Guidelines define the *architecture* (Mantine design system, TanStack Query, feature structure, capability gating). This document defines the *experience* that architecture serves.
 - `ROADMAP.md` — phases F0–F10 sequence the delivery. Each F-phase implementation plan authors its per-module UX spec and references the relevant sections here.
 
 ## How to Use This Document
 
 - Keep this document current as the single reference for what the product's screens are, how they connect, and how they behave. Per-module UX specs live in each F-phase implementation plan and point back here rather than restating it.
-- This document is the design handbook. Significant UX decisions (navigation model, app-shell structure, primary interaction patterns) are also recorded as coded **ADRs in the *Frontend Decision Records* log in `AGENTS.md`**, with the full design detail kept here and referenced from the ADR. Do not relitigate settled decisions inline.
+- This document is the design handbook. Significant UX decisions (navigation model, app-shell structure, primary interaction patterns) are also recorded as coded **ADRs in [docs/adr/](docs/adr/README.md)**, one file per record, with the full design detail kept here and referenced from the ADR. Do not relitigate settled decisions inline.
 - Working design explorations and reviews stay in the session scratchpad (untracked) per `CLAUDE.md` until a decision is promoted here or into an ADR.
 - Conventions here are advisory to the user experience. Authorization, validation, and business rules remain the backend's responsibility; UX gating exists only to improve the experience.
 
@@ -39,7 +39,7 @@ Everything else renders as **contextual UI**, layered over its originating conte
 
 Child resources that cannot exist without their parent and need no workspace of their own are never routes — they render inside the parent. A child that is itself a substantial workspace (e.g. a consultation) may still earn a route.
 
-This model governs the Screen Inventory below and is recorded as **ADR-0001 (Navigation & Surface Model)** in `AGENTS.md`.
+This model governs the Screen Inventory below and is recorded as **[ADR-0001 (Navigation & Surface Model)](docs/adr/0001-navigation-and-surface-model.md)**.
 
 ## Sitemap
 
@@ -54,7 +54,7 @@ The routable structure, by route group. Only **destinations** appear as nodes (p
 /invite                      Invitation Acceptance
 ```
 
-The confirm screens carry no token in their path. `/auth/callback` exchanges the emailed token for a session before redirecting, so by the time the user arrives they are already signed in on a short-lived recovery or invitation session; repeating the token in the URL would add referrer and history exposure for nothing. What authorizes setting a password without the current one is the **password-setup ticket** issued by the callback (`AGENTS.md` → ADR-0007), and its absence is what an expired or already-used link looks like on these screens.
+The confirm screens carry no token in their path. `/auth/callback` exchanges the emailed token for a session before redirecting, so by the time the user arrives they are already signed in on a short-lived recovery or invitation session; repeating the token in the URL would add referrer and history exposure for nothing. What authorizes setting a password without the current one is the **password-setup ticket** issued by the callback ([ADR-0007](docs/adr/0007-auth-route-client-and-password-setup-ticket.md)), and its absence is what an expired or already-used link looks like on these screens.
 
 Non-navigable frames: Forbidden / Unauthorized, Session Expired. Technical: `/auth/callback`, landing resolver (post-auth redirect into the correct namespace).
 
@@ -92,7 +92,7 @@ Org shell: header (notifications bell → drawer → dialog), user menu (My acco
 
 ## Navigation Model
 
-How users move between destinations, and where each role lands. Navigation is **capability-gated, not role-gated** (per `AGENTS.md`): items are filtered by the capability map from `GET /api/users/me`, and the role columns below describe the *expected outcome* of that gating for design clarity — the client never compares role names.
+How users move between destinations, and where each role lands. Navigation is **capability-gated, not role-gated** (per `docs/frontend.md` → *Client Authorization*): items are filtered by the capability map from `GET /api/users/me`, and the role columns below describe the *expected outcome* of that gating for design clarity — the client never compares role names.
 
 ### Primary navigation — organization app
 
@@ -322,7 +322,7 @@ Surfaces are split by the [Navigation & Surface Model](#navigation--surface-mode
 Reading these tables:
 
 - **Routes are provisional.** Final paths are settled in the Sitemap and Navigation Model sections.
-- **Role tags are advisory.** They indicate who a surface is primarily *for*, to guide navigation and layout — not an authorization spec. Access is enforced server-side and surfaced to the client as a capability map (`GET /api/users/me`) per the `AGENTS.md` client-authorization model. The same feature area renders and permits differently per role.
+- **Role tags are advisory.** They indicate who a surface is primarily *for*, to guide navigation and layout — not an authorization spec. Access is enforced server-side and surfaced to the client as a capability map (`GET /api/users/me`) per the `docs/frontend.md` client-authorization model. The same feature area renders and permits differently per role.
 
 Role key: **SA** = Super Admin · **Owner** = Org Owner · **Admin** = Org Admin · **Physio** = Physiotherapist · **Reception** = Receptionist · **All** = all four org roles.
 
@@ -421,7 +421,7 @@ Forced modes (2–3) are surfaced by the post-auth landing resolver rather than 
 
 # Interaction & State Conventions
 
-The cross-cutting behaviors every screen honors, defined once here so flows and per-module specs reference them instead of restating. These are advisory UX: the server remains the source of truth, and these conventions decide how its responses are *presented*. They align with the capability-gating model and the `ErrorCodes` / response envelope in `AGENTS.md`.
+The cross-cutting behaviors every screen honors, defined once here so flows and per-module specs reference them instead of restating. These are advisory UX: the server remains the source of truth, and these conventions decide how its responses are *presented*. They align with the capability-gating model and the `ErrorCodes` / response envelope in `AGENTS.md` (client-side handling: `docs/frontend.md` → *Error Handling and Types*).
 
 ## State model
 
@@ -519,7 +519,7 @@ This is the baseline catalog. Per-screen refinements (which fields a specific fo
 
 # Content & Layout Conventions
 
-The UX layer above Mantine: app-shell regions, page and collection patterns, form and dialog norms, and copy conventions. Structure and pattern live here; the design language they draw on is the Visual Foundation below, implemented as the single Mantine theme per `AGENTS.md`. Per-module refinements are settled in each F-phase spec and may extend these, not silently diverge.
+The UX layer above Mantine: app-shell regions, page and collection patterns, form and dialog norms, and copy conventions. Structure and pattern live here; the design language they draw on is the Visual Foundation below, implemented as the single Mantine theme per `docs/frontend.md` → *Design System*. Per-module refinements are settled in each F-phase spec and may extend these, not silently diverge.
 
 ## Visual Foundation
 

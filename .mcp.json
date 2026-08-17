@@ -3,6 +3,19 @@
     "mantine": {
       "command": "npx",
       "args": ["-y", "@mantine/mcp-server"]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=vljqtlczahbnfxfausvq",
+        "--features=database,docs,debugging,development"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
     }
   }
 }

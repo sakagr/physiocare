@@ -75,7 +75,15 @@ The user may also run the gate themselves in their own terminal. `.verify-ok` is
 
 Useful flags while iterating: `--only=typecheck,lint`, `--skip=build`, `--list`.
 
-A **Stop hook** (`.claude/settings.json` → `scripts/verify-guard.mjs`) checks whether source changed since the last successful verify and blocks if it did. It deliberately does **not** run the gate — that would add minutes to every turn. It costs milliseconds and only catches declaring work done without having verified it. If it fires and you genuinely changed nothing under `src/`, `tests/`, `supabase/migrations/` or `scripts/`, say so. `VERIFY_GUARD=off` disables it.
+A **Stop hook** (`.claude/settings.json` → `scripts/verify-guard.mjs`) blocks when source changed since the last successful verify. It deliberately does **not** run the gate — that would add minutes to every turn — and costs milliseconds.
+
+Three things it deliberately does not do, each learned from it locking a session for nine consecutive turns:
+
+- It **blocks at most once per turn**, honouring `stop_hook_active`. If it has already blocked and you have answered it, it will not block again on the same turn; re-blocking cannot achieve anything the first block did not.
+- It judges staleness **via git**, not file timestamps. A checkout, a commit, or a `touch` moves mtime without changing content, and an earlier timestamp-based version reported those as stale.
+- An **incomplete verify is not on its own a reason to block.** `db-types` skips whenever the local Supabase stack is down, which is a laptop's normal state — blocking on completeness meant a gate that could never go green. Disclosing an unproven gate is your job when you report the work, not something enforced every turn.
+
+Its scope is `src/`, `tests/`, `supabase/migrations/`, `scripts/` and the build config files. Documentation, `.claude/` configuration and `.reviews/` artifacts are not source — a stage that writes only markdown will not trip it. `VERIFY_GUARD=off` disables it entirely.
 
 ## The Phase Workflow
 

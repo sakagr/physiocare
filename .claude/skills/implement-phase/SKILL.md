@@ -20,10 +20,25 @@ only place the two words appear together; everywhere else, say which one you mea
    ends by listing artifacts and stopping.
 2. **The two approval gates are hard stops.** After stage 1 and after stage 2, stop and
    wait. Silence is not approval. Do not begin the next stage in the same turn.
+
+   **Instructions for a later stage do not pre-approve the gates before it.** A message may
+   approve stage 1 *and* tell you how to implement, what to plant, what to check at stage 6 —
+   supplying that guidance early is convenient for the user, not a waiver. Hold it, run the
+   next stage only, and stop at its gate. The only thing that clears a gate is the user
+   responding to the artifact that gate produced: stage 2's gate is cleared by a reply to
+   `02-plan.md`, which cannot exist before you write it.
+
+   If you are unsure whether a message approved the gate in front of you or a later one, ask.
+   One question costs a turn; blowing through a gate costs the plan the user never saw.
 3. **Stages 3 through 8 run continuously** once the plan is approved, pausing only for an
    escalated finding at stage 7.
 4. **Never skip a stage.** If one cannot run, say why and stop.
 5. **Write every artifact before moving on.** A stage that produced no file did not happen.
+6. **Update `STATE.md` as the last action of every stage, before reporting.** It is the only
+   thing a fresh session reads to learn where the work stands, so a stale `STATE.md` is worse
+   than none: it asserts something false with the same confidence as something true. If
+   `STATE.md` says stage 1 while `02-plan.md` exists on disk, the record is lying. Check it
+   against the artifacts actually present whenever you start or resume.
 
 ## Resolving the phase
 
@@ -126,9 +141,14 @@ Scope In/Out, decisions section keyed by task number.
 
 Task 1 should be the tracer bullet — layer-spanning, end to end. See the `tdd` skill.
 
-**Then stop.**
+**Then stop** — update `STATE.md`, report the path, and wait. Do not start implementing in the
+same turn, even if the message that approved stage 1 also told you how to implement.
 
 ### 3 — Implementation
+
+**Requires a reply to `02-plan.md` from the user.** If the plan has not been approved since it
+was written, stop and say so — approval of stage 1 is not approval of a plan that did not exist
+yet.
 
 Follow the `tdd` skill. Per-task vertical slices, RED-GREEN per behavior, refactor at the
 end of each task. Use `api-endpoint`, `migration-rls`, and `adr` where they apply.

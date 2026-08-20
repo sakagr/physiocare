@@ -49,7 +49,13 @@ an authorization path is **QA**. A service reaching a peer domain service is **A
 | **blocker** | Ships a security hole, data-loss path, or silently wrong result. Cannot be deferred. |
 | **major** | Real defect or violated invariant. Fix this phase unless explicitly deferred. |
 | **minor** | Correct but fragile, inconsistent, or under-tested. Deferrable with a reason. |
-| **nit** | Style, naming, wording. Batch or drop. Never escalate. |
+| **nit** | Style, naming, wording — **cosmetic only**. Batch or drop. Never escalate. |
+
+If a finding has any behavioural consequence — a wrong status code, a wrong number, an
+error a caller can observe — it is **minor at least, never a nit**, however consistent it is
+with its neighbours or however small the fix. "Consistent with eleven sibling call sites" is an
+argument for batching it, not for calling it cosmetic. `nit` is the one severity that may
+disappear without a record, which is exactly why nothing with consequence may be filed there.
 
 A blocker is surfaced to the user **even when it is auto-fixed**. They should know one
 existed.
@@ -116,7 +122,13 @@ three. An unbounded review→fix→review cycle is how a phase never finishes.
 
 ## Deferred findings
 
-Anything the user decides not to fix is appended to `.reviews/deferred-findings.md` with
-its ID, claim, severity, the reason, and the phase it came from. That file is tracked in
+There are exactly three dispositions: **auto-fix**, **escalate**, and **defer**. "Drop" is not
+one of them for anything above a nit.
+
+Anything at minor or above that is not fixed — whether the user decided that or a reviewer
+recommended it — is appended to `.reviews/deferred-findings.md` with its ID, claim, severity,
+the reason, and the phase it came from. A reviewer recommending "not worth fixing" is a
+recommendation to **defer**, and it still earns a ledger line; without one the next phase's
+reviewers rediscover it and you triage the same question again. That file is tracked in
 git — it is project state in the same category as a tech-debt list, and it is what stops
 the next phase's reviewers re-reporting a settled question.

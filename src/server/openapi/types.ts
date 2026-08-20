@@ -70,8 +70,9 @@ export interface OperationEntry {
   /**
    * The authorization predicate name, only where `withCapability` actually
    * wraps the handler. Most operations authorize inside the service layer
-   * instead, so this is populated for one operation today
-   * (`canBootstrapOrganization`), not inferred for the rest (FL2).
+   * instead, so this is populated for two operations today
+   * (`canBootstrapOrganization` and `canExplorePlatformApi`), not inferred
+   * for the rest (FL2).
    */
   capability?: string;
   pathParams?: ParamDef[];

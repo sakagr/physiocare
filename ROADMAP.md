@@ -285,17 +285,6 @@ Hardening before launch.
 
 ---
 
-*Prerequisite: Pipeline smoke-test scaffolding (none — this line exists to test detection).*
-
-# Phase T0 – Pipeline Smoke Test
-
-Throwaway phase for exercising the stage pipeline. Delete this phase once the pipeline is trusted.
-
-- Add `GET /api/organizations/current/summary` returning clinic, user and patient counts for the caller's organization
-- Owner and Admin only
-
----
-
 # Phase R9 – Operations & Deployment
 
 Operational readiness.

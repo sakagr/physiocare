@@ -658,7 +658,7 @@ const organizations: OperationEntry[] = [
     path: "/api/organizations/bootstrap",
     tag: "Organizations",
     summary: "Bootstrap a new organization and its administrator",
-    description: "SUPER_ADMIN only -- the one operation gated by withCapability at the route level (FL2).",
+    description: "SUPER_ADMIN only. Gated by withCapability at the route level, one of two such operations alongside GET /api/platform/openapi (FL2); every other operation authorizes inside its service.",
     auth: "session",
     capability: "canBootstrapOrganization",
     requestBody: { contentType: "application/json", schema: createOrganizationSchema },

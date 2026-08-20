@@ -150,6 +150,13 @@ same turn, even if the message that approved stage 1 also told you how to implem
 was written, stop and say so — approval of stage 1 is not approval of a plan that did not exist
 yet.
 
+**Re-check the base before writing any code.** If `git rev-parse HEAD` no longer matches the
+base SHA in `STATE.md`, something was committed between stage 1 and now — a tooling fix, an
+unrelated change — and it is by definition not this phase's work. Advance the base to the
+current HEAD, note the change and why in `STATE.md`, and confirm the tree is clean. Skipping
+this hands the stage-5 reviewers someone else's commit to review as though the phase produced
+it.
+
 Follow the `tdd` skill. Per-task vertical slices, RED-GREEN per behavior, refactor at the
 end of each task. Use `api-endpoint`, `migration-rls`, and `adr` where they apply.
 
